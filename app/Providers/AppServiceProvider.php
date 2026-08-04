@@ -56,6 +56,9 @@ use App\Repositories\Eloquent\EloquentRolRepository;
 use App\Repositories\Eloquent\EloquentSesionRepository;
 use App\Repositories\Eloquent\EloquentTareaRepository;
 use App\Repositories\Eloquent\EloquentUsuarioRepository;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -99,6 +102,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        RateLimiter::for('login', function (Request $request): Limit {
+            $username = (string) $request->input('nombre_usuario');
+
+            return Limit::perMinute(5)->by($username.$request->ip());
+        });
     }
 }
