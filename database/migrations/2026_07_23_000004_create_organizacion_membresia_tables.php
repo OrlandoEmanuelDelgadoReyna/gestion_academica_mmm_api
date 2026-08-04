@@ -89,7 +89,7 @@ return new class extends Migration
                 $table->boolean('requiere_observacion')->default(false);
                 $table->boolean('activo')->default(true);
                 $table->timestamps();
-                $table->unique(['estado_origen_id', 'estado_destino_id']);
+                $table->unique(['estado_origen_id', 'estado_destino_id'], 'uk_trans_est_orig_dest');
             });
         }
 
