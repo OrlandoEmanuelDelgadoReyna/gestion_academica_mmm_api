@@ -52,10 +52,18 @@ return new class extends Migration
         });
         Schema::create('programacion_estados_membresia_permitidos', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('programacion_academica_id')->constrained('programaciones_academicas')->restrictOnDelete();
-            $table->foreignId('estado_membresia_id')->constrained('estados_membresia')->restrictOnDelete();
+            $table->foreignId('programacion_academica_id');
+            $table->foreignId('estado_membresia_id');
             $table->timestamps();
             $table->unique(['programacion_academica_id', 'estado_membresia_id']);
+            $table->foreign('programacion_academica_id', 'fk_prog_estado_prog')
+                ->references('id')
+                ->on('programaciones_academicas')
+                ->restrictOnDelete();
+            $table->foreign('estado_membresia_id', 'fk_prog_estado_estado')
+                ->references('id')
+                ->on('estados_membresia')
+                ->restrictOnDelete();
         });
         Schema::create('programacion_docentes', function (Blueprint $table): void {
             $table->id();
