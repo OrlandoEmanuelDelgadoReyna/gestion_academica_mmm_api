@@ -1,0 +1,85 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Concerns;
+
+use App\Models\Usuario;
+use Database\Seeders\InstitutionalCatalogSeeder;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\Sanctum;
+
+trait AuthenticatesApiUsers
+{
+    protected function seedInstitutionalCatalog(): void
+    {
+        $this->seed(InstitutionalCatalogSeeder::class);
+    }
+
+    protected function actingAsAdmin(): Usuario
+    {
+        $usuario = Usuario::query()->where('nombre_usuario', 'admin')->firstOrFail();
+
+        Sanctum::actingAs($usuario);
+
+        return $usuario;
+    }
+
+    protected function createAcademicUser(string $username = 'docente'): Usuario
+    {
+        $this->seedInstitutionalCatalog();
+
+        $church = \DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
+        $adminId = Usuario::query()->where('nombre_usuario', 'admin')->value('id');
+        $docenteRole = \DB::table('roles')->where('codigo', 'DOCENTE')->value('id');
+        $academicoPermiso = \DB::table('permisos')->where('codigo', 'academico.gestionar')->value('id');
+        $now = now();
+
+        \DB::table('rol_permisos')->updateOrInsert(
+            ['rol_id' => $docenteRole, 'permiso_id' => $academicoPermiso],
+            ['asignado_at' => $now, 'updated_at' => $now, 'created_at' => $now],
+        );
+
+        \DB::table('miembros')->updateOrInsert(
+            ['iglesia_id' => $church, 'tipo_documento' => 'DNI', 'numero_documento' => 'DOCENTE01'],
+            [
+                'nombres' => 'Docente',
+                'apellidos' => 'Academico',
+                'fecha_nacimiento' => '1990-01-01',
+                'sexo' => 'M',
+                'correo_electronico' => 'docente@mmm.local',
+                'telefono' => '999999998',
+                'direccion' => 'Dirección docente',
+                'updated_at' => $now,
+                'created_at' => $now,
+            ],
+        );
+
+        $memberId = \DB::table('miembros')->where('numero_documento', 'DOCENTE01')->value('id');
+
+        \DB::table('usuarios')->updateOrInsert(
+            ['nombre_usuario' => $username],
+            ['miembro_id' => $memberId, 'contrasena' => Hash::make('Admin123*'), 'activo' => true, 'updated_at' => $now, 'created_at' => $now],
+        );
+
+        $usuarioId = Usuario::query()->where('nombre_usuario', $username)->value('id');
+
+        \DB::table('usuario_roles')->updateOrInsert(
+            ['usuario_id' => $usuarioId, 'rol_id' => $docenteRole],
+            ['asignado_por_usuario_id' => $adminId, 'asignado_at' => $now, 'updated_at' => $now, 'created_at' => $now],
+        );
+
+        $usuario = Usuario::query()->findOrFail($usuarioId);
+        Sanctum::actingAs($usuario);
+
+        return $usuario;
+    }
+
+    protected function actingAsCertificador(): Usuario
+    {
+        $this->seedInstitutionalCatalog();
+        $usuario = $this->actingAsAdmin();
+
+        return $usuario;
+    }
+}

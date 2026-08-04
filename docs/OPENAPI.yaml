@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  title: SIGE-MMM API
+  version: 1.0.0
+  description: API REST versionada del Sistema Integral de Gestión Eclesiástica.
+servers:
+  - url: http://localhost/api/v1
+security:
+  - sanctumBearer: []
+paths:
+  /login:
+    post:
+      security: []
+      summary: Inicia sesión y emite un token Sanctum.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre_usuario, contrasena]
+              properties:
+                nombre_usuario: {type: string}
+                contrasena: {type: string, format: password}
+                nombre_dispositivo: {type: string}
+      responses: {'200': {description: Token emitido}, '401': {description: Credenciales inválidas}}
+  /logout:
+    post: {summary: Revoca el token actual, responses: {'204': {description: Token revocado}}}
+  /me:
+    get: {summary: Perfil autenticado, responses: {'200': {description: Usuario autenticado}}}
+  /contrasena:
+    put: {summary: Cambia contraseña y revoca tokens, responses: {'204': {description: Contraseña actualizada}}}
+  /usuarios:
+    get: {summary: Lista usuarios autorizados, responses: {'200': {description: Listado paginado}}}
+    post: {summary: Crea usuario, responses: {'201': {description: Usuario creado}}}
+  /usuarios/{id}:
+    get: {summary: Obtiene usuario, parameters: [{name: id, in: path, required: true, schema: {type: integer}}], responses: {'200': {description: Usuario}}}
+    delete: {summary: Desactiva usuario, parameters: [{name: id, in: path, required: true, schema: {type: integer}}], responses: {'204': {description: Usuario desactivado}}}
+components:
+  securitySchemes:
+    sanctumBearer: {type: http, scheme: bearer, bearerFormat: Sanctum}

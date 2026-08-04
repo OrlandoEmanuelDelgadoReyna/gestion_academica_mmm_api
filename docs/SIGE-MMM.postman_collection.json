@@ -1,0 +1,9 @@
+{
+  "info": {"name": "SIGE-MMM API V1", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [{"key": "baseUrl", "value": "http://localhost/api/v1"}, {"key": "token", "value": ""}],
+  "item": [
+    {"name": "Login", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"nombre_usuario\": \"admin\",\n  \"contrasena\": \"Admin123*\",\n  \"nombre_dispositivo\": \"Postman\"\n}"}, "url": "{{baseUrl}}/login"}},
+    {"name": "Mi perfil", "request": {"method": "GET", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": "{{baseUrl}}/me"}},
+    {"name": "Logout", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}], "url": "{{baseUrl}}/logout"}}
+  ]
+}
