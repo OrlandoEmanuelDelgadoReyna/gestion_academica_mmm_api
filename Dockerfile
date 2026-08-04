@@ -59,7 +59,6 @@ RUN mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cac
 
 COPY docker/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /entrypoint.sh
@@ -69,3 +68,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 ENTRYPOINT ["/entrypoint.sh"]
+
