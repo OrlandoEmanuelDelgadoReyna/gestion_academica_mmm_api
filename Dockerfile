@@ -30,7 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         zip \
         intl \
         gd \
-        opcache \
     && rm -rf /var/lib/apt/lists/*
 
 # Composer
