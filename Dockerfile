@@ -2,7 +2,7 @@ FROM php:8.5-fpm-bookworm
 
 LABEL maintainer="Gestión Académica MMM"
 
-# System dependencies + PHP extensions (Laravel 12, MySQL, Sanctum)
+# System libraries required to compile PHP extensions used by Laravel
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
@@ -10,22 +10,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
     curl \
+    pkg-config \
+    libcurl4-openssl-dev \
+    libzip-dev \
+    libicu-dev \
     libpng-dev \
     libjpeg62-turbo-dev \
     libfreetype6-dev \
-    libzip-dev \
+    libwebp-dev \
     libonig-dev \
     libxml2-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    default-libmysqlclient-dev \
+    && docker-php-ext-configure gd --enable-gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" \
         pdo_mysql \
         mbstring \
-        xml \
+        bcmath \
         curl \
         zip \
-        bcmath \
-        opcache \
+        intl \
         gd \
+        opcache \
     && rm -rf /var/lib/apt/lists/*
 
 # Composer
