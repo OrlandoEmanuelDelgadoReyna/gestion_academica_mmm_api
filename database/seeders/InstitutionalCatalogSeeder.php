@@ -16,7 +16,7 @@ class InstitutionalCatalogSeeder extends Seeder
         $now = now();
 
         DB::transaction(function () use ($now): void {
-            $churchId = DB::table('iglesias')->updateOrInsert(['codigo' => 'MMM-PRINCIPAL'], ['nombre' => 'Iglesia MMM Principal', 'direccion' => 'Dirección institucional', 'telefono' => '999999999', 'correo_electronico' => 'contacto@mmm.local', 'activo' => true, 'updated_at' => $now, 'created_at' => $now]);
+            DB::table('iglesias')->updateOrInsert(['codigo' => 'MMM-PRINCIPAL'], ['nombre' => 'MMM Chachapoyas', 'direccion' => 'Chachapoyas, Amazonas', 'telefono' => '999999999', 'correo_electronico' => 'contacto@mmm.local', 'activo' => true, 'updated_at' => $now, 'created_at' => $now]);
             $church = DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
 
             foreach ([['codigo' => 'ADMINISTRADOR', 'nombre' => 'Administrador', 'descripcion' => 'Administración integral del sistema'], ['codigo' => 'SECRETARIA', 'nombre' => 'Secretaría', 'descripcion' => 'Gestión de miembros y operación'], ['codigo' => 'DOCENTE', 'nombre' => 'Docente', 'descripcion' => 'Gestión académica']] as $role) {

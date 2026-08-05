@@ -25,8 +25,8 @@ final class AdminUserSeeder extends Seeder
             DB::table('iglesias')->updateOrInsert(
                 ['codigo' => 'MMM-PRINCIPAL'],
                 [
-                    'nombre' => 'Iglesia MMM Principal',
-                    'direccion' => 'Dirección institucional',
+                    'nombre' => 'MMM Chachapoyas',
+                    'direccion' => 'Chachapoyas, Amazonas',
                     'telefono' => '999999999',
                     'correo_electronico' => 'contacto@mmm.local',
                     'activo' => true,
