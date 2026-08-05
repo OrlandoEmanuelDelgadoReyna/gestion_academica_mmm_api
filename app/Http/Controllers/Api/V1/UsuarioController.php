@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\DTO\ActualizarUsuarioData;
 use App\DTO\CrearUsuarioData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUsuarioRequest;
+use App\Http\Requests\UpdateUsuarioRequest;
 use App\Http\Resources\UsuarioResource;
 use App\Models\Usuario;
 use App\Services\UsuarioService;
@@ -38,6 +40,21 @@ final class UsuarioController extends Controller
         $this->authorize('view', $usuario);
 
         return new UsuarioResource($this->service->find($usuario->id));
+    }
+
+    public function update(UpdateUsuarioRequest $request, Usuario $usuario): UsuarioResource
+    {
+        $user = $this->service->update(
+            $usuario,
+            new ActualizarUsuarioData(
+                (string) $request->string('nombre_usuario'),
+                $request->boolean('activo'),
+                $request->collect('roles')->map(fn ($id) => (int) $id)->all(),
+            ),
+            $request->user()?->id,
+        );
+
+        return new UsuarioResource($user);
     }
 
     public function destroy(Request $request, Usuario $usuario): JsonResponse

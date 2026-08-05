@@ -39,7 +39,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('logout', [AutenticacionController::class, 'logout']);
         Route::get('me', [AutenticacionController::class, 'me']);
         Route::put('contrasena', [AutenticacionController::class, 'changePassword']);
-        Route::apiResource('usuarios', UsuarioController::class)->only(['index', 'store', 'show', 'destroy']);
+        Route::apiResource('usuarios', UsuarioController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
         Route::apiResource('iglesias', IglesiaController::class)->only(['index', 'store', 'show', 'update']);
         Route::apiResource('miembros', MiembroController::class)->only(['index', 'store', 'show', 'update', 'destroy']);
         Route::apiResource('permisos', PermisoController::class)->only(['index', 'store', 'show', 'update']);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\DTO\ActualizarUsuarioData;
 use App\DTO\CrearUsuarioData;
 use App\Models\Usuario;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
@@ -34,6 +35,40 @@ final class UsuarioService
             $this->auditorias->record($actorId, 'crear', 'usuarios', $usuario->id, null, $usuario->only(['miembro_id', 'nombre_usuario', 'activo']));
 
             return $usuario->load('roles');
+        });
+    }
+
+    public function update(Usuario $usuario, ActualizarUsuarioData $data, ?int $actorId): Usuario
+    {
+        return $this->transactions->execute(function () use ($usuario, $data, $actorId): Usuario {
+            $before = [
+                'nombre_usuario' => $usuario->nombre_usuario,
+                'activo' => $usuario->activo,
+                'roles' => $usuario->roles()->pluck('roles.id')->all(),
+            ];
+
+            $updated = $this->usuarios->update($usuario, [
+                'nombre_usuario' => $data->nombreUsuario,
+                'activo' => $data->activo,
+            ]);
+            $this->usuarios->syncRoles($updated, $data->rolIds);
+
+            $updated = $updated->load(['miembro', 'roles']);
+
+            $this->auditorias->record(
+                $actorId,
+                'actualizar',
+                'usuarios',
+                $updated->id,
+                $before,
+                [
+                    'nombre_usuario' => $updated->nombre_usuario,
+                    'activo' => $updated->activo,
+                    'roles' => $updated->roles->pluck('id')->all(),
+                ],
+            );
+
+            return $updated;
         });
     }
 
