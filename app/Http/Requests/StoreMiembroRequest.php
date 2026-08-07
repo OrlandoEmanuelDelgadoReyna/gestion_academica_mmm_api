@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesPersonData;
 use App\Models\Miembro;
+use App\Support\Validation\PersonDataRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 final class StoreMiembroRequest extends FormRequest
 {
+    use NormalizesPersonData;
+
     public function authorize(): bool
     {
         return $this->user()?->can('create', Miembro::class) ?? false;
@@ -17,34 +21,30 @@ final class StoreMiembroRequest extends FormRequest
 
     public function rules(): array
     {
+        $dniRules = PersonDataRules::dni();
+        $dniRules[] = Rule::unique('miembros', 'numero_documento')->where(
+            fn ($query) => $query
+                ->where('iglesia_id', $this->integer('iglesia_id'))
+                ->where('tipo_documento', $this->string('tipo_documento')->toString())
+                ->whereNull('deleted_at'),
+        );
+
         return [
             'iglesia_id' => ['required', 'integer', 'exists:iglesias,id'],
-            'tipo_documento' => ['required', 'string', 'max:30'],
-            'numero_documento' => [
-                'required',
-                'string',
-                'max:30',
-                Rule::unique('miembros', 'numero_documento')->where(
-                    fn ($query) => $query
-                        ->where('iglesia_id', $this->integer('iglesia_id'))
-                        ->where('tipo_documento', $this->string('tipo_documento')->toString())
-                        ->whereNull('deleted_at'),
-                ),
-            ],
-            'nombres' => ['required', 'string', 'max:120'],
-            'apellidos' => ['required', 'string', 'max:120'],
-            'fecha_nacimiento' => ['nullable', 'date'],
-            'sexo' => ['nullable', 'in:M,F,O'],
-            'correo_electronico' => ['nullable', 'email', 'max:150'],
-            'telefono' => ['nullable', 'string', 'max:30'],
-            'direccion' => ['nullable', 'string', 'max:255'],
+            'tipo_documento' => ['required', 'string', Rule::in(['DNI'])],
+            'numero_documento' => $dniRules,
+            'nombres' => PersonDataRules::nombres(),
+            'apellidos' => PersonDataRules::apellidos(),
+            'fecha_nacimiento' => PersonDataRules::fechaNacimiento(),
+            'sexo' => PersonDataRules::sexo(),
+            'correo_electronico' => PersonDataRules::correo(),
+            'telefono' => PersonDataRules::celular(),
+            'direccion' => PersonDataRules::direccion(),
         ];
     }
 
     public function messages(): array
     {
-        return [
-            'numero_documento.unique' => 'El número de documento ya está registrado.',
-        ];
+        return PersonDataRules::messages();
     }
 }
