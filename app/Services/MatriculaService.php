@@ -17,10 +17,13 @@ use Illuminate\Validation\ValidationException;
 /** Applies enrolment eligibility and capacity rules atomically. */
 final class MatriculaService
 {
+    private const CONFLICT_MESSAGE = 'No se puede realizar la matrícula. El miembro tiene un cruce de horarios con otra programación. El miembro ya tiene una programación con un horario que se cruza.';
+
     public function __construct(
         private MatriculaRepositoryInterface $matriculas,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private HorarioConflictService $horarioConflict,
     ) {}
 
     public function paginate(int $perPage): LengthAwarePaginator
@@ -74,8 +77,19 @@ final class MatriculaService
 
     public function validateScheduleConflict(Miembro $miembro, ProgramacionAcademica $programacion): void
     {
+        // Fuente principal: horarios recurrentes (programacion_horarios).
+        // Política explícita: si la programación destino no tiene horarios, esta capa no bloquea
+        // (mismo criterio que el check legacy cuando no hay sesiones).
+        $horarios = $this->normalizeProgramacionHorarios($programacion);
+
+        if ($horarios !== []
+            && $this->horarioConflict->miembroHasConflict($miembro->id, $horarios, $programacion->id)) {
+            throw ValidationException::withMessages(['miembro_id' => self::CONFLICT_MESSAGE]);
+        }
+
+        // Segunda capa (temporal): sesiones concretas, si existen.
         if ($this->matriculas->hasScheduleConflict($miembro, $programacion)) {
-            throw ValidationException::withMessages(['miembro_id' => 'El miembro tiene un conflicto de horario con otra matrícula activa.']);
+            throw ValidationException::withMessages(['miembro_id' => self::CONFLICT_MESSAGE]);
         }
     }
 
@@ -104,5 +118,20 @@ final class MatriculaService
         }
 
         $this->validateScheduleConflict($miembro, $programacion);
+    }
+
+    /**
+     * @return list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>
+     */
+    private function normalizeProgramacionHorarios(ProgramacionAcademica $programacion): array
+    {
+        return $programacion->horarios()
+            ->get(['dia_semana', 'hora_inicio', 'hora_fin'])
+            ->map(fn ($slot): array => [
+                'dia_semana' => (int) $slot->dia_semana,
+                'hora_inicio' => $this->horarioConflict->normalizeTime((string) $slot->hora_inicio),
+                'hora_fin' => $this->horarioConflict->normalizeTime((string) $slot->hora_fin),
+            ])
+            ->all();
     }
 }

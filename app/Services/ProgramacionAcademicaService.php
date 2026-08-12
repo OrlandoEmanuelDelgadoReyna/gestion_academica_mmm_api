@@ -93,13 +93,39 @@ final class ProgramacionAcademicaService
         }
 
         foreach ($docenteIds as $miembroId) {
-            if ($this->horarioConflict->docenteHasConflict($miembroId, $horarios, $existing?->id)) {
+            $conflictSlot = $this->horarioConflict->findDocenteConflict(
+                $miembroId,
+                $horarios,
+                $existing?->id,
+            );
+
+            if ($conflictSlot !== null) {
                 throw ValidationException::withMessages([
-                    'horarios' => 'El docente tiene otra programación con horario solapado.',
-                    'docente_ids' => 'Uno o más docentes tienen conflicto de horario con otra programación.',
+                    'horarios' => $this->formatDocenteConflictMessage($conflictSlot),
+                    'docente_ids' => $this->formatDocenteConflictMessage($conflictSlot),
                 ]);
             }
         }
+    }
+
+    /** @param array{dia_semana: int, hora_inicio: string, hora_fin: string} $slot */
+    private function formatDocenteConflictMessage(array $slot): string
+    {
+        $dias = [
+            1 => 'lunes',
+            2 => 'martes',
+            3 => 'miércoles',
+            4 => 'jueves',
+            5 => 'viernes',
+            6 => 'sábado',
+            7 => 'domingo',
+        ];
+
+        $dia = $dias[$slot['dia_semana']] ?? 'día '.$slot['dia_semana'];
+        $inicio = $slot['hora_inicio'];
+        $fin = $slot['hora_fin'];
+
+        return "El docente tiene un cruce de horarios con otra programación. Ya tiene una programación los {$dia} de {$inicio} a {$fin}.";
     }
 
     /**

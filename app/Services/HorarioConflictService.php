@@ -61,14 +61,15 @@ final class HorarioConflictService
 
     /**
      * @param  list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>  $horarios
+     * @return array{dia_semana: int, hora_inicio: string, hora_fin: string}|null
      */
-    public function docenteHasConflict(
+    public function findDocenteConflict(
         int $miembroId,
         array $horarios,
         ?int $excludeProgramacionId = null,
-    ): bool {
+    ): ?array {
         if ($horarios === []) {
-            return false;
+            return null;
         }
 
         $programacionIds = ProgramacionAcademica::query()
@@ -81,7 +82,7 @@ final class HorarioConflictService
             ->pluck('id');
 
         if ($programacionIds->isEmpty()) {
-            return false;
+            return null;
         }
 
         $existing = ProgramacionHorario::query()
@@ -97,12 +98,23 @@ final class HorarioConflictService
 
             foreach ($horarios as $candidate) {
                 if ($this->schedulesOverlap($existingSlot, $candidate)) {
-                    return true;
+                    return $existingSlot;
                 }
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * @param  list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>  $horarios
+     */
+    public function docenteHasConflict(
+        int $miembroId,
+        array $horarios,
+        ?int $excludeProgramacionId = null,
+    ): bool {
+        return $this->findDocenteConflict($miembroId, $horarios, $excludeProgramacionId) !== null;
     }
 
     /**
