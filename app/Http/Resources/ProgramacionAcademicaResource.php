@@ -30,6 +30,7 @@ final class ProgramacionAcademicaResource extends JsonResource
             'aula' => $this->whenLoaded('aula'),
             'docentes' => MiembroResource::collection($this->whenLoaded('docentes')),
             'estados_membresia_permitidos' => $this->whenLoaded('estadosMembresiaPermitidos'),
+            'horarios' => ProgramacionHorarioResource::collection($this->whenLoaded('horarios')),
         ];
     }
 }

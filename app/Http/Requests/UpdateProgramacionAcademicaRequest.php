@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Support\Validation\ProgramacionHorarioRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 final class UpdateProgramacionAcademicaRequest extends FormRequest
 {
@@ -31,6 +33,12 @@ final class UpdateProgramacionAcademicaRequest extends FormRequest
             'docente_ids.*' => ['integer', 'exists:miembros,id'],
             'estados_membresia_permitidos' => ['sometimes', 'array'],
             'estados_membresia_permitidos.*' => ['integer', 'exists:estados_membresia,id'],
+            ...ProgramacionHorarioRules::updateRules(),
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        ProgramacionHorarioRules::after($validator);
     }
 }

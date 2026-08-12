@@ -46,6 +46,11 @@ class ProgramacionAcademica extends Model
         return $this->belongsToMany(EstadoMembresia::class, 'programacion_estados_membresia_permitidos')->withTimestamps();
     }
 
+    public function horarios(): HasMany
+    {
+        return $this->hasMany(ProgramacionHorario::class);
+    }
+
     public function sesiones(): HasMany
     {
         return $this->hasMany(Sesion::class);

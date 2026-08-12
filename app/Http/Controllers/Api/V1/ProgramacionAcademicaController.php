@@ -34,7 +34,7 @@ final class ProgramacionAcademicaController extends Controller
     {
         $this->authorize('view', $programacionAcademica);
 
-        return new ProgramacionAcademicaResource($programacionAcademica->load(['curso', 'aula', 'docentes', 'estadosMembresiaPermitidos']));
+        return new ProgramacionAcademicaResource($programacionAcademica->load(['curso', 'aula', 'docentes', 'estadosMembresiaPermitidos', 'horarios']));
     }
 
     public function update(UpdateProgramacionAcademicaRequest $request, ProgramacionAcademica $programacionAcademica): ProgramacionAcademicaResource

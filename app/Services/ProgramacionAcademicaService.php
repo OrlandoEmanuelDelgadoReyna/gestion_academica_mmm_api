@@ -18,6 +18,7 @@ final class ProgramacionAcademicaService
         private ProgramacionAcademicaRepositoryInterface $programaciones,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private HorarioConflictService $horarioConflict,
     ) {}
 
     public function paginate(int $perPage): LengthAwarePaginator
@@ -29,6 +30,7 @@ final class ProgramacionAcademicaService
     {
         $data['estado'] ??= 'borrador';
         $this->validateBusinessRules($data);
+        $this->validateDocenteScheduleConflicts($data);
 
         return $this->transactions->execute(function () use ($data, $actor): ProgramacionAcademica {
             $programacion = $this->programaciones->create($data);
@@ -41,6 +43,7 @@ final class ProgramacionAcademicaService
     public function update(ProgramacionAcademica $programacion, array $data, int $actor): ProgramacionAcademica
     {
         $this->validateBusinessRules(array_merge($programacion->getAttributes(), $data));
+        $this->validateDocenteScheduleConflicts($data, $programacion);
 
         return $this->transactions->execute(function () use ($programacion, $data, $actor): ProgramacionAcademica {
             $before = $programacion->getAttributes();
@@ -75,5 +78,87 @@ final class ProgramacionAcademicaService
         if (isset($data['nota_minima_aprobatoria'], $data['escala_maxima']) && (float) $data['nota_minima_aprobatoria'] > (float) $data['escala_maxima']) {
             throw ValidationException::withMessages(['nota_minima_aprobatoria' => 'La nota mínima no puede superar la escala máxima.']);
         }
+    }
+
+    private function validateDocenteScheduleConflicts(array $data, ?ProgramacionAcademica $existing = null): void
+    {
+        $horarios = $this->resolveHorariosForConflictCheck($data, $existing);
+        if ($horarios === []) {
+            return;
+        }
+
+        $docenteIds = $this->resolveDocenteIdsForConflictCheck($data, $existing);
+        if ($docenteIds === []) {
+            return;
+        }
+
+        foreach ($docenteIds as $miembroId) {
+            if ($this->horarioConflict->docenteHasConflict($miembroId, $horarios, $existing?->id)) {
+                throw ValidationException::withMessages([
+                    'horarios' => 'El docente tiene otra programación con horario solapado.',
+                    'docente_ids' => 'Uno o más docentes tienen conflicto de horario con otra programación.',
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @return list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>
+     */
+    private function resolveHorariosForConflictCheck(array $data, ?ProgramacionAcademica $existing): array
+    {
+        if (array_key_exists('horarios', $data) && is_array($data['horarios'])) {
+            return $this->normalizeHorariosPayload($data['horarios']);
+        }
+
+        if ($existing === null) {
+            return [];
+        }
+
+        return $existing->horarios()
+            ->get(['dia_semana', 'hora_inicio', 'hora_fin'])
+            ->map(fn ($slot): array => [
+                'dia_semana' => (int) $slot->dia_semana,
+                'hora_inicio' => $this->horarioConflict->normalizeTime((string) $slot->hora_inicio),
+                'hora_fin' => $this->horarioConflict->normalizeTime((string) $slot->hora_fin),
+            ])
+            ->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function resolveDocenteIdsForConflictCheck(array $data, ?ProgramacionAcademica $existing): array
+    {
+        if (array_key_exists('docente_ids', $data) && is_array($data['docente_ids'])) {
+            return array_map('intval', $data['docente_ids']);
+        }
+
+        if ($existing === null) {
+            return [];
+        }
+
+        return $existing->docentes()->pluck('miembros.id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $horarios
+     * @return list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>
+     */
+    private function normalizeHorariosPayload(array $horarios): array
+    {
+        $normalized = [];
+        foreach ($horarios as $slot) {
+            if (! is_array($slot) || ! isset($slot['dia_semana'], $slot['hora_inicio'], $slot['hora_fin'])) {
+                continue;
+            }
+            $normalized[] = [
+                'dia_semana' => (int) $slot['dia_semana'],
+                'hora_inicio' => $this->horarioConflict->normalizeTime((string) $slot['hora_inicio']),
+                'hora_fin' => $this->horarioConflict->normalizeTime((string) $slot['hora_fin']),
+            ];
+        }
+
+        return $normalized;
     }
 }
