@@ -119,14 +119,15 @@ final class HorarioConflictService
 
     /**
      * @param  list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>  $horarios
+     * @return array{programacion_academica_id: int, dia_semana: int, hora_inicio: string, hora_fin: string}|null
      */
-    public function miembroHasConflict(
+    public function findMiembroConflict(
         int $miembroId,
         array $horarios,
         ?int $excludeProgramacionId = null,
-    ): bool {
+    ): ?array {
         if ($horarios === []) {
-            return false;
+            return null;
         }
 
         $programacionIds = ProgramacionAcademica::query()
@@ -142,15 +143,16 @@ final class HorarioConflictService
             ->pluck('id');
 
         if ($programacionIds->isEmpty()) {
-            return false;
+            return null;
         }
 
         $existing = ProgramacionHorario::query()
             ->whereIn('programacion_academica_id', $programacionIds)
-            ->get(['dia_semana', 'hora_inicio', 'hora_fin']);
+            ->get(['programacion_academica_id', 'dia_semana', 'hora_inicio', 'hora_fin']);
 
         foreach ($existing as $slot) {
             $existingSlot = [
+                'programacion_academica_id' => (int) $slot->programacion_academica_id,
                 'dia_semana' => (int) $slot->dia_semana,
                 'hora_inicio' => $this->normalizeTime((string) $slot->hora_inicio),
                 'hora_fin' => $this->normalizeTime((string) $slot->hora_fin),
@@ -158,12 +160,23 @@ final class HorarioConflictService
 
             foreach ($horarios as $candidate) {
                 if ($this->schedulesOverlap($existingSlot, $candidate)) {
-                    return true;
+                    return $existingSlot;
                 }
             }
         }
 
-        return false;
+        return null;
+    }
+
+    /**
+     * @param  list<array{dia_semana: int, hora_inicio: string, hora_fin: string}>  $horarios
+     */
+    public function miembroHasConflict(
+        int $miembroId,
+        array $horarios,
+        ?int $excludeProgramacionId = null,
+    ): bool {
+        return $this->findMiembroConflict($miembroId, $horarios, $excludeProgramacionId) !== null;
     }
 
     public function normalizeTime(string $value): string

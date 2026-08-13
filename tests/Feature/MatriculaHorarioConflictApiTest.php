@@ -52,11 +52,17 @@ final class MatriculaHorarioConflictApiTest extends TestCase
 
         $response = $this->enroll($progB->id);
         $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['miembro_id']);
+            ->assertJsonPath('code', 'HORARIO_CONFLICTO')
+            ->assertJsonValidationErrors(['miembro_id'])
+            ->assertJsonPath('conflicto_horario.grupo', 'A')
+            ->assertJsonPath('conflicto_horario.dia_semana', 1)
+            ->assertJsonPath('conflicto_horario.hora_inicio', '19:00')
+            ->assertJsonPath('conflicto_horario.hora_fin', '21:00');
 
+        $this->assertNotEmpty($response->json('conflicto_horario.curso'));
         $this->assertStringContainsString(
-            'cruce de horarios',
-            (string) $response->json('errors.miembro_id.0'),
+            'matrícula',
+            strtolower((string) $response->json('errors.miembro_id.0')),
         );
         $this->assertStringNotContainsString(
             'solapado',

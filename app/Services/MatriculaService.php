@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Exceptions\MatriculaHorarioConflictException;
 use App\Models\HistorialMembresia;
 use App\Models\Matricula;
 use App\Models\Miembro;
@@ -17,8 +18,6 @@ use Illuminate\Validation\ValidationException;
 /** Applies enrolment eligibility and capacity rules atomically. */
 final class MatriculaService
 {
-    private const CONFLICT_MESSAGE = 'No se puede realizar la matrícula. El miembro tiene un cruce de horarios con otra programación. El miembro ya tiene una programación con un horario que se cruza.';
-
     public function __construct(
         private MatriculaRepositoryInterface $matriculas,
         private DatabaseTransactionRepositoryInterface $transactions,
@@ -82,14 +81,23 @@ final class MatriculaService
         // (mismo criterio que el check legacy cuando no hay sesiones).
         $horarios = $this->normalizeProgramacionHorarios($programacion);
 
-        if ($horarios !== []
-            && $this->horarioConflict->miembroHasConflict($miembro->id, $horarios, $programacion->id)) {
-            throw ValidationException::withMessages(['miembro_id' => self::CONFLICT_MESSAGE]);
+        if ($horarios !== []) {
+            $conflict = $this->horarioConflict->findMiembroConflict(
+                $miembro->id,
+                $horarios,
+                $programacion->id,
+            );
+
+            if ($conflict !== null) {
+                throw MatriculaHorarioConflictException::make(
+                    $this->buildConflictoHorarioPayload($conflict),
+                );
+            }
         }
 
         // Segunda capa (temporal): sesiones concretas, si existen.
         if ($this->matriculas->hasScheduleConflict($miembro, $programacion)) {
-            throw ValidationException::withMessages(['miembro_id' => self::CONFLICT_MESSAGE]);
+            throw MatriculaHorarioConflictException::make(null);
         }
     }
 
@@ -133,5 +141,47 @@ final class MatriculaService
                 'hora_fin' => $this->horarioConflict->normalizeTime((string) $slot->hora_fin),
             ])
             ->all();
+    }
+
+    /**
+     * @param  array{programacion_academica_id: int, dia_semana: int, hora_inicio: string, hora_fin: string}  $conflict
+     * @return array<string, mixed>|null
+     */
+    private function buildConflictoHorarioPayload(array $conflict): ?array
+    {
+        $programacion = ProgramacionAcademica::query()
+            ->with('curso:id,nombre,codigo')
+            ->find($conflict['programacion_academica_id']);
+
+        if ($programacion === null) {
+            return null;
+        }
+
+        $dias = [
+            1 => 'Lunes',
+            2 => 'Martes',
+            3 => 'Miércoles',
+            4 => 'Jueves',
+            5 => 'Viernes',
+            6 => 'Sábado',
+            7 => 'Domingo',
+        ];
+
+        $cursoNombre = $programacion->curso?->nombre;
+        if ($cursoNombre === null || $cursoNombre === '') {
+            return null;
+        }
+
+        return [
+            'programacion_id' => $programacion->id,
+            'curso' => $cursoNombre,
+            'curso_codigo' => $programacion->curso?->codigo,
+            'grupo' => $programacion->grupo,
+            'periodo' => $programacion->periodo,
+            'dia_semana' => $conflict['dia_semana'],
+            'dia' => $dias[$conflict['dia_semana']] ?? null,
+            'hora_inicio' => $conflict['hora_inicio'],
+            'hora_fin' => $conflict['hora_fin'],
+        ];
     }
 }

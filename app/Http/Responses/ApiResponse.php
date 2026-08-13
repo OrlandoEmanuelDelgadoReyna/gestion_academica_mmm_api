@@ -9,8 +9,22 @@ use Illuminate\Http\JsonResponse;
 /** Builds the stable API envelope used by all versioned endpoints. */
 final class ApiResponse
 {
-    public static function error(string $code, string $message, int $status, array $errors = []): JsonResponse
-    {
-        return response()->json(['message' => $message, 'code' => $code, 'errors' => $errors], $status);
+    /**
+     * @param  array<string, list<string>>  $errors
+     * @param  array<string, mixed>  $extra
+     */
+    public static function error(
+        string $code,
+        string $message,
+        int $status,
+        array $errors = [],
+        array $extra = [],
+    ): JsonResponse {
+        return response()->json([
+            'message' => $message,
+            'code' => $code,
+            'errors' => $errors,
+            ...$extra,
+        ], $status);
     }
 }

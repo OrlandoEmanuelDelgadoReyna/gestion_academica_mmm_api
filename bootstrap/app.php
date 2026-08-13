@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\MatriculaHorarioConflictException;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
@@ -24,6 +25,22 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponse::error('UNAUTHENTICATED', 'Autenticación requerida.', 401);
+            }
+        });
+        $exceptions->render(function (MatriculaHorarioConflictException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                $extra = [];
+                if (is_array($exception->conflictoHorario) && $exception->conflictoHorario !== []) {
+                    $extra['conflicto_horario'] = $exception->conflictoHorario;
+                }
+
+                return ApiResponse::error(
+                    MatriculaHorarioConflictException::CODE,
+                    MatriculaHorarioConflictException::USER_MESSAGE,
+                    422,
+                    $exception->errors(),
+                    $extra,
+                );
             }
         });
         $exceptions->render(function (ValidationException $exception, Request $request) {
