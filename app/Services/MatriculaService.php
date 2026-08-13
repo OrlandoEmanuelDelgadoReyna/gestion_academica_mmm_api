@@ -44,7 +44,12 @@ final class MatriculaService
 
             $this->auditorias->record($actor, 'CREATE', 'matriculas', $matricula->id, null, $matricula->getAttributes());
 
-            return $matricula->load(['programacionAcademica.curso', 'miembro']);
+            return $matricula->load([
+                'programacionAcademica.curso',
+                'programacionAcademica.horarios',
+                'programacionAcademica.docentes',
+                'miembro',
+            ]);
         });
     }
 
@@ -55,7 +60,12 @@ final class MatriculaService
             $updated = $this->matriculas->update($matricula, $data);
             $this->auditorias->record($actor, 'UPDATE', 'matriculas', $updated->id, $before, $updated->getAttributes());
 
-            return $updated->load(['programacionAcademica.curso', 'miembro']);
+            return $updated->load([
+                'programacionAcademica.curso',
+                'programacionAcademica.horarios',
+                'programacionAcademica.docentes',
+                'miembro',
+            ]);
         });
     }
 
@@ -70,7 +80,12 @@ final class MatriculaService
             $updated = $this->matriculas->updateEstado($matricula, $estado);
             $this->auditorias->record($actor, 'STATE_TRANSITION', 'matriculas', $updated->id, $before, $updated->getAttributes());
 
-            return $updated->load(['programacionAcademica.curso', 'miembro']);
+            return $updated->load([
+                'programacionAcademica.curso',
+                'programacionAcademica.horarios',
+                'programacionAcademica.docentes',
+                'miembro',
+            ]);
         });
     }
 

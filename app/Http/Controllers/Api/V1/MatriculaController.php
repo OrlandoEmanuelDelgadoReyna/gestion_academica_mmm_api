@@ -39,7 +39,12 @@ final class MatriculaController extends Controller
     {
         $this->authorize('view', $matricula);
 
-        return new MatriculaResource($matricula->load(['programacionAcademica.curso', 'miembro']));
+        return new MatriculaResource($matricula->load([
+            'programacionAcademica.curso',
+            'programacionAcademica.horarios',
+            'programacionAcademica.docentes',
+            'miembro',
+        ]));
     }
 
     public function update(UpdateMatriculaRequest $request, Matricula $matricula): MatriculaResource

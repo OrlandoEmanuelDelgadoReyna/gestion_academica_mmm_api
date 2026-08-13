@@ -16,7 +16,12 @@ final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
     public function paginate(int $perPage): LengthAwarePaginator
     {
         return Matricula::query()
-            ->with(['programacionAcademica.curso', 'miembro'])
+            ->with([
+                'programacionAcademica.curso',
+                'programacionAcademica.horarios',
+                'programacionAcademica.docentes',
+                'miembro',
+            ])
             ->orderByDesc('fecha_matricula')
             ->paginate($perPage);
     }
