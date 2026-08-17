@@ -21,7 +21,14 @@ final class SesionController extends Controller
     {
         $this->authorize('viewAny', Sesion::class);
 
-        return SesionResource::collection($this->service->paginate((int) $request->integer('per_page', 15)));
+        $programacionId = $request->filled('programacion_academica_id')
+            ? $request->integer('programacion_academica_id')
+            : null;
+
+        return SesionResource::collection($this->service->paginate(
+            (int) $request->integer('per_page', 15),
+            $programacionId > 0 ? $programacionId : null,
+        ));
     }
 
     public function store(StoreSesionRequest $request): SesionResource

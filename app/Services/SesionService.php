@@ -22,9 +22,9 @@ final class SesionService
         private AuditoriaRepositoryInterface $auditorias,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null): LengthAwarePaginator
     {
-        return $this->sesiones->paginate($perPage);
+        return $this->sesiones->paginate($perPage, $programacionAcademicaId);
     }
 
     public function create(array $data, int $actor): Sesion

@@ -5,18 +5,24 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\GenerateSesionesRequest;
 use App\Http\Requests\StoreProgramacionAcademicaRequest;
 use App\Http\Requests\TransitionProgramacionAcademicaRequest;
 use App\Http\Requests\UpdateProgramacionAcademicaRequest;
 use App\Http\Resources\ProgramacionAcademicaResource;
+use App\Http\Resources\SesionResource;
 use App\Models\ProgramacionAcademica;
 use App\Services\ProgramacionAcademicaService;
+use App\Services\SesionGenerationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class ProgramacionAcademicaController extends Controller
 {
-    public function __construct(private ProgramacionAcademicaService $service) {}
+    public function __construct(
+        private ProgramacionAcademicaService $service,
+        private SesionGenerationService $sesionGeneration,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -47,5 +53,19 @@ final class ProgramacionAcademicaController extends Controller
         return new ProgramacionAcademicaResource(
             $this->service->transitionEstado($programacionAcademica, (string) $request->string('estado'), $request->user()->id)
         );
+    }
+
+    public function generarSesiones(
+        GenerateSesionesRequest $request,
+        ProgramacionAcademica $programacionAcademica,
+    ): AnonymousResourceCollection {
+        $result = $this->sesionGeneration->generate($programacionAcademica, $request->user()->id);
+
+        return SesionResource::collection(collect($result->createdSesiones))
+            ->additional([
+                'created' => $result->created,
+                'skipped' => $result->skipped,
+                'total' => $result->total,
+            ]);
     }
 }
