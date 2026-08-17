@@ -11,7 +11,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface AsistenciaRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator;
+    public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator;
 
     public function create(array $data): Asistencia;
 

@@ -13,7 +13,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null): LengthAwarePaginator
     {
         return Matricula::query()
             ->with([
@@ -22,6 +22,14 @@ final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
                 'programacionAcademica.docentes',
                 'miembro',
             ])
+            ->when(
+                $programacionAcademicaId !== null,
+                fn ($query) => $query->where('programacion_academica_id', $programacionAcademicaId),
+            )
+            ->when(
+                $estado !== null,
+                fn ($query) => $query->where('estado', $estado),
+            )
             ->orderByDesc('fecha_matricula')
             ->paginate($perPage);
     }

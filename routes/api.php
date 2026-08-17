@@ -60,8 +60,12 @@ Route::prefix('v1')->group(function (): void {
         Route::post('programaciones-academicas/{programacionAcademica}/sesiones/generar', [ProgramacionAcademicaController::class, 'generarSesiones']);
         Route::apiResource('matriculas', MatriculaController::class)->only(['index', 'store', 'show', 'update']);
         Route::post('matriculas/{matricula}/transiciones', [MatriculaController::class, 'transition']);
-        Route::apiResource('sesiones', SesionController::class)->only(['index', 'store', 'show', 'update']);
-        Route::apiResource('asistencias', AsistenciaController::class)->only(['index', 'store', 'show', 'update']);
+        Route::apiResource('sesiones', SesionController::class)
+            ->parameters(['sesiones' => 'sesion'])
+            ->only(['index', 'store', 'show', 'update']);
+        Route::apiResource('asistencias', AsistenciaController::class)
+            ->parameters(['asistencias' => 'asistencia'])
+            ->only(['index', 'store', 'show', 'update']);
         Route::apiResource('materiales', MaterialController::class)->only(['index', 'store', 'show', 'update']);
 
         Route::apiResource('tareas', TareaController::class);

@@ -17,6 +17,8 @@ final class UpdateAsistenciaRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'sesion_id' => ['prohibited'],
+            'matricula_id' => ['prohibited'],
             'estado' => ['sometimes', 'string', Rule::in(['asistio', 'falto', 'justificado'])],
             'observacion' => ['nullable', 'string', 'max:255', Rule::requiredIf(fn () => $this->input('estado') === 'justificado')],
         ];

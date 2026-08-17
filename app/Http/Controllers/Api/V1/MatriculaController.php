@@ -15,6 +15,7 @@ use App\Models\ProgramacionAcademica;
 use App\Services\MatriculaService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 final class MatriculaController extends Controller
 {
@@ -24,7 +25,22 @@ final class MatriculaController extends Controller
     {
         $this->authorize('viewAny', Matricula::class);
 
-        return MatriculaResource::collection($this->service->paginate((int) $request->integer('per_page', 15)));
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'programacion_academica_id' => ['sometimes', 'integer', 'exists:programaciones_academicas,id'],
+            'estado' => ['sometimes', 'string', Rule::in(['activa', 'retirada', 'completada'])],
+        ]);
+
+        $programacionId = isset($validated['programacion_academica_id'])
+            ? (int) $validated['programacion_academica_id']
+            : null;
+        $estado = isset($validated['estado']) ? (string) $validated['estado'] : null;
+
+        return MatriculaResource::collection($this->service->paginate(
+            (int) ($validated['per_page'] ?? 15),
+            $programacionId,
+            $estado,
+        ));
     }
 
     public function store(StoreMatriculaRequest $request): MatriculaResource

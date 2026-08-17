@@ -11,6 +11,8 @@ use App\Repositories\Contracts\AsistenciaRepositoryInterface;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 
 /** Transactional application service for attendance records. */
@@ -22,22 +24,36 @@ final class AsistenciaService
         private AuditoriaRepositoryInterface $auditorias,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator
     {
-        return $this->asistencias->paginate($perPage);
+        return $this->asistencias->paginate($perPage, $sesionId);
     }
 
     public function create(array $data, int $actor): Asistencia
     {
         $this->validateBusinessRules($data);
 
-        return $this->transactions->execute(function () use ($data, $actor): Asistencia {
-            $data['registrado_por_usuario_id'] = $actor;
-            $asistencia = $this->asistencias->create($data);
-            $this->auditorias->record($actor, 'CREATE', 'asistencias', $asistencia->id, null, $asistencia->getAttributes());
+        try {
+            return $this->transactions->execute(function () use ($data, $actor): Asistencia {
+                $data['registrado_por_usuario_id'] = $actor;
+                $asistencia = $this->asistencias->create($data);
+                $this->auditorias->record($actor, 'CREATE', 'asistencias', $asistencia->id, null, $asistencia->getAttributes());
 
-            return $asistencia->load(['sesion', 'matricula.miembro']);
-        });
+                return $asistencia->load(['sesion', 'matricula.miembro']);
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages([
+                'matricula_id' => 'Ya existe un registro de asistencia para esta sesión y matrícula.',
+            ]);
+        } catch (QueryException $exception) {
+            if ($this->isUniqueConstraintFailure($exception)) {
+                throw ValidationException::withMessages([
+                    'matricula_id' => 'Ya existe un registro de asistencia para esta sesión y matrícula.',
+                ]);
+            }
+
+            throw $exception;
+        }
     }
 
     public function update(Asistencia $asistencia, array $data, int $actor): Asistencia
@@ -78,5 +94,15 @@ final class AsistenciaService
         if ($this->asistencias->existsForSessionAndEnrollment($sesion, $matricula, $exceptId)) {
             throw ValidationException::withMessages(['matricula_id' => 'Ya existe un registro de asistencia para esta sesión y matrícula.']);
         }
+    }
+
+    private function isUniqueConstraintFailure(QueryException $exception): bool
+    {
+        $sqlState = (string) ($exception->errorInfo[0] ?? '');
+        $message = $exception->getMessage();
+
+        return $sqlState === '23000'
+            || str_contains($message, 'UNIQUE constraint failed')
+            || str_contains($message, 'Duplicate entry');
     }
 }

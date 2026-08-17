@@ -17,6 +17,7 @@ final class UpdateSesionRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'programacion_academica_id' => ['prohibited'],
             'orden' => ['sometimes', 'integer', 'min:1'],
             'inicio_at' => ['sometimes', 'date'],
             'fin_at' => ['sometimes', 'date'],

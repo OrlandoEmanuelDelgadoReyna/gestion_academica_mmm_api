@@ -12,10 +12,14 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentAsistenciaRepository implements AsistenciaRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator
     {
         return Asistencia::query()
             ->with(['sesion', 'matricula.miembro'])
+            ->when(
+                $sesionId !== null,
+                fn ($query) => $query->where('sesion_id', $sesionId),
+            )
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }

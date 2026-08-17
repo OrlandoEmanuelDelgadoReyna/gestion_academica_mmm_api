@@ -21,7 +21,17 @@ final class AsistenciaController extends Controller
     {
         $this->authorize('viewAny', Asistencia::class);
 
-        return AsistenciaResource::collection($this->service->paginate((int) $request->integer('per_page', 15)));
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sesion_id' => ['sometimes', 'integer', 'exists:sesiones,id'],
+        ]);
+
+        $sesionId = isset($validated['sesion_id']) ? (int) $validated['sesion_id'] : null;
+
+        return AsistenciaResource::collection($this->service->paginate(
+            (int) ($validated['per_page'] ?? 15),
+            $sesionId,
+        ));
     }
 
     public function store(StoreAsistenciaRequest $request): AsistenciaResource
