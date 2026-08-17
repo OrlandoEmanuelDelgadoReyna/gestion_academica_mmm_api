@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AsistenciaQrException;
 use App\Exceptions\MatriculaHorarioConflictException;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Responses\ApiResponse;
@@ -25,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponse::error('UNAUTHENTICATED', 'Autenticación requerida.', 401);
+            }
+        });
+        $exceptions->render(function (AsistenciaQrException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponse::error($exception->errorCode, $exception->getMessage(), $exception->status);
             }
         });
         $exceptions->render(function (MatriculaHorarioConflictException $exception, Request $request) {

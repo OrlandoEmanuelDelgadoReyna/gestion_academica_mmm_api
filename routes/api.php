@@ -63,6 +63,8 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('sesiones', SesionController::class)
             ->parameters(['sesiones' => 'sesion'])
             ->only(['index', 'store', 'show', 'update']);
+        Route::get('sesiones/{sesion}/qr', [SesionController::class, 'qr']);
+        Route::post('asistencias/qr', [AsistenciaController::class, 'storeFromQr']);
         Route::apiResource('asistencias', AsistenciaController::class)
             ->parameters(['asistencias' => 'asistencia'])
             ->only(['index', 'store', 'show', 'update']);

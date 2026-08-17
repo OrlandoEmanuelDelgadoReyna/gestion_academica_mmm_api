@@ -9,13 +9,18 @@ use App\Http\Requests\StoreSesionRequest;
 use App\Http\Requests\UpdateSesionRequest;
 use App\Http\Resources\SesionResource;
 use App\Models\Sesion;
+use App\Services\SesionAsistenciaQrTokenService;
 use App\Services\SesionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class SesionController extends Controller
 {
-    public function __construct(private SesionService $service) {}
+    public function __construct(
+        private SesionService $service,
+        private SesionAsistenciaQrTokenService $qrTokens,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -46,5 +51,21 @@ final class SesionController extends Controller
     public function update(UpdateSesionRequest $request, Sesion $sesion): SesionResource
     {
         return new SesionResource($this->service->update($sesion, $request->validated(), $request->user()->id));
+    }
+
+    public function qr(Sesion $sesion): JsonResponse
+    {
+        $this->authorize('view', $sesion);
+
+        $sesion->load(['programacionAcademica.curso']);
+        $token = $this->qrTokens->issue($sesion);
+
+        return response()->json([
+            'data' => [
+                'token' => $token,
+                'payload' => $this->qrTokens->payload($token),
+                'sesion' => (new SesionResource($sesion))->resolve(),
+            ],
+        ]);
     }
 }

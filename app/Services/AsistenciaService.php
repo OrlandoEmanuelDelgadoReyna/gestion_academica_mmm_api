@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Exceptions\AsistenciaQrException;
 use App\Models\Asistencia;
 use App\Models\Matricula;
 use App\Models\Sesion;
+use App\Models\Usuario;
 use App\Repositories\Contracts\AsistenciaRepositoryInterface;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
@@ -22,6 +24,7 @@ final class AsistenciaService
         private AsistenciaRepositoryInterface $asistencias,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private SesionAsistenciaQrTokenService $qrTokens,
     ) {}
 
     public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator
@@ -50,6 +53,52 @@ final class AsistenciaService
                 throw ValidationException::withMessages([
                     'matricula_id' => 'Ya existe un registro de asistencia para esta sesión y matrícula.',
                 ]);
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function registerFromQr(string $token, Usuario $user): Asistencia
+    {
+        $sesionId = $this->qrTokens->parse($token);
+        $sesion = Sesion::query()->with(['programacionAcademica.curso'])->find($sesionId);
+
+        if ($sesion === null) {
+            throw AsistenciaQrException::unavailable();
+        }
+
+        if ($sesion->estado === 'cancelada') {
+            throw AsistenciaQrException::cancelled();
+        }
+
+        $miembroId = $user->miembro_id;
+        if ($miembroId === null) {
+            throw AsistenciaQrException::withoutEnrollment();
+        }
+
+        $matricula = Matricula::query()
+            ->where('miembro_id', $miembroId)
+            ->where('programacion_academica_id', $sesion->programacion_academica_id)
+            ->first();
+
+        if ($matricula === null || $matricula->estado !== 'activa') {
+            throw AsistenciaQrException::withoutEnrollment();
+        }
+
+        if ($this->asistencias->existsForSessionAndEnrollment($sesion, $matricula)) {
+            throw AsistenciaQrException::alreadyRegistered();
+        }
+
+        try {
+            return $this->create([
+                'sesion_id' => $sesion->id,
+                'matricula_id' => $matricula->id,
+                'estado' => 'asistio',
+            ], $user->id);
+        } catch (ValidationException $exception) {
+            if ($exception->errors()['matricula_id'] ?? null) {
+                throw AsistenciaQrException::alreadyRegistered();
             }
 
             throw $exception;

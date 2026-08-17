@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegisterAsistenciaQrRequest;
 use App\Http\Requests\StoreAsistenciaRequest;
 use App\Http\Requests\UpdateAsistenciaRequest;
 use App\Http\Resources\AsistenciaResource;
+use App\Exceptions\AsistenciaQrException;
 use App\Models\Asistencia;
+use App\Models\Usuario;
 use App\Services\AsistenciaService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -49,5 +53,22 @@ final class AsistenciaController extends Controller
     public function update(UpdateAsistenciaRequest $request, Asistencia $asistencia): AsistenciaResource
     {
         return new AsistenciaResource($this->service->update($asistencia, $request->validated(), $request->user()->id));
+    }
+
+    public function storeFromQr(RegisterAsistenciaQrRequest $request): JsonResponse
+    {
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        $asistencia = $this->service->registerFromQr(
+            (string) $request->string('token'),
+            $user,
+        )->load(['sesion.programacionAcademica.curso', 'matricula.miembro']);
+
+        return response()->json([
+            'message' => 'Asistencia registrada correctamente.',
+            'code' => AsistenciaQrException::ASISTENCIA_REGISTRADA,
+            'data' => (new AsistenciaResource($asistencia))->resolve($request),
+        ], 201);
     }
 }
