@@ -8,18 +8,25 @@ use App\Models\Asistencia;
 use App\Models\Matricula;
 use App\Models\Sesion;
 use App\Repositories\Contracts\AsistenciaRepositoryInterface;
+use App\Services\AcademicAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentAsistenciaRepository implements AsistenciaRepositoryInterface
 {
-    public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator
+    public function __construct(private AcademicAccess $academicAccess) {}
+
+    public function paginate(int $perPage, ?int $sesionId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return Asistencia::query()
+        $query = Asistencia::query()
             ->with(['sesion', 'matricula.miembro'])
             ->when(
                 $sesionId !== null,
-                fn ($query) => $query->where('sesion_id', $sesionId),
-            )
+                fn ($builder) => $builder->where('sesion_id', $sesionId),
+            );
+
+        $this->academicAccess->constrainAsistencias($query, $assignedMiembroId);
+
+        return $query
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }

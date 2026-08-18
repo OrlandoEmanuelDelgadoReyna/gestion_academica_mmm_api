@@ -6,31 +6,29 @@ namespace App\Policies;
 
 use App\Models\Matricula;
 use App\Models\Usuario;
+use App\Services\AcademicAccess;
 
 final class MatriculaPolicy
 {
+    public function __construct(private AcademicAccess $access) {}
+
     public function viewAny(Usuario $user): bool
     {
-        return $this->allows($user);
+        return $this->access->canViewAssignedLists($user);
     }
 
     public function view(Usuario $user, Matricula $matricula): bool
     {
-        return $this->allows($user);
+        return $this->access->teachesProgramacionId($user, (int) $matricula->programacion_academica_id);
     }
 
     public function create(Usuario $user): bool
     {
-        return $this->allows($user);
+        return $this->access->isGlobalAcademic($user);
     }
 
     public function update(Usuario $user, Matricula $matricula): bool
     {
-        return $this->allows($user);
-    }
-
-    private function allows(Usuario $user): bool
-    {
-        return $user->roles()->whereHas('permisos', fn ($query) => $query->where('codigo', 'academico.gestionar')->where('activo', true))->exists();
+        return $this->access->isGlobalAcademic($user);
     }
 }

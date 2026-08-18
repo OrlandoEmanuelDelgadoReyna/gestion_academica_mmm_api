@@ -8,7 +8,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSesionRequest;
 use App\Http\Requests\UpdateSesionRequest;
 use App\Http\Resources\SesionResource;
+use App\Models\ProgramacionAcademica;
 use App\Models\Sesion;
+use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\SesionAsistenciaQrTokenService;
 use App\Services\SesionService;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +23,7 @@ final class SesionController extends Controller
     public function __construct(
         private SesionService $service,
         private SesionAsistenciaQrTokenService $qrTokens,
+        private AcademicAccess $academicAccess,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -30,9 +34,20 @@ final class SesionController extends Controller
             ? $request->integer('programacion_academica_id')
             : null;
 
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        if ($programacionId !== null && $programacionId > 0) {
+            $programacion = ProgramacionAcademica::query()->find($programacionId);
+            if ($programacion !== null) {
+                $this->authorize('view', $programacion);
+            }
+        }
+
         return SesionResource::collection($this->service->paginate(
             (int) $request->integer('per_page', 15),
-            $programacionId > 0 ? $programacionId : null,
+            ($programacionId !== null && $programacionId > 0) ? $programacionId : null,
+            $this->academicAccess->listScopeMiembroId($user),
         ));
     }
 

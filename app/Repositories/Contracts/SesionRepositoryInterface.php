@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 
 interface SesionRepositoryInterface
 {
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null): LengthAwarePaginator;
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator;
 
     public function create(array $data): Sesion;
 

@@ -9,7 +9,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface ProgramacionAcademicaRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator;
+    public function paginate(int $perPage, ?int $assignedMiembroId = null): LengthAwarePaginator;
 
     public function create(array $data): ProgramacionAcademica;
 

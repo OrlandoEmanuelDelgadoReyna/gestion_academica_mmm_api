@@ -27,9 +27,9 @@ final class AsistenciaService
         private SesionAsistenciaQrTokenService $qrTokens,
     ) {}
 
-    public function paginate(int $perPage, ?int $sesionId = null): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $sesionId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return $this->asistencias->paginate($perPage, $sesionId);
+        return $this->asistencias->paginate($perPage, $sesionId, $assignedMiembroId);
     }
 
     public function create(array $data, int $actor): Asistencia

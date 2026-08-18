@@ -20,7 +20,8 @@ final class CalificacionApiTest extends TestCase
 
     public function test_calcular_returns_weighted_grade_and_pass_status(): void
     {
-        $usuario = $this->createAcademicUser();
+        $this->seedInstitutionalCatalog();
+        $usuario = $this->actingAsAdmin();
         $context = $this->createAcademicContext($usuario->id);
 
         $response = $this->postJson("/api/v1/matriculas/{$context['matricula_id']}/calificaciones/calcular");

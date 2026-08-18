@@ -6,17 +6,25 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\ProgramacionAcademica;
 use App\Repositories\Contracts\ProgramacionAcademicaRepositoryInterface;
+use App\Services\AcademicAccess;
 use App\Services\HorarioConflictService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentProgramacionAcademicaRepository implements ProgramacionAcademicaRepositoryInterface
 {
-    public function __construct(private HorarioConflictService $horarioConflict) {}
+    public function __construct(
+        private HorarioConflictService $horarioConflict,
+        private AcademicAccess $academicAccess,
+    ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return ProgramacionAcademica::query()
-            ->with(['curso', 'aula', 'horarios'])
+        $query = ProgramacionAcademica::query()
+            ->with(['curso', 'aula', 'horarios']);
+
+        $this->academicAccess->constrainProgramaciones($query, $assignedMiembroId);
+
+        return $query
             ->orderByDesc('fecha_inicio')
             ->paginate($perPage);
     }

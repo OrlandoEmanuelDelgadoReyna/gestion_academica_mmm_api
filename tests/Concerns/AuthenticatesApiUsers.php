@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Models\ProgramacionAcademica;
 use App\Models\Usuario;
 use Database\Seeders\InstitutionalCatalogSeeder;
 use Illuminate\Support\Facades\Hash;
@@ -25,29 +26,30 @@ trait AuthenticatesApiUsers
         return $usuario;
     }
 
+    /** Creates a DOCENTE user without academico.gestionar. */
     protected function createAcademicUser(string $username = 'docente'): Usuario
+    {
+        return $this->createDocenteUser($username);
+    }
+
+    protected function createDocenteUser(string $username = 'docente'): Usuario
     {
         $this->seedInstitutionalCatalog();
 
         $church = \DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
         $adminId = Usuario::query()->where('nombre_usuario', 'admin')->value('id');
         $docenteRole = \DB::table('roles')->where('codigo', 'DOCENTE')->value('id');
-        $academicoPermiso = \DB::table('permisos')->where('codigo', 'academico.gestionar')->value('id');
         $now = now();
-
-        \DB::table('rol_permisos')->updateOrInsert(
-            ['rol_id' => $docenteRole, 'permiso_id' => $academicoPermiso],
-            ['asignado_at' => $now, 'updated_at' => $now, 'created_at' => $now],
-        );
+        $documento = $this->docenteDocumentoFor($username);
 
         \DB::table('miembros')->updateOrInsert(
-            ['iglesia_id' => $church, 'tipo_documento' => 'DNI', 'numero_documento' => 'DOCENTE01'],
+            ['iglesia_id' => $church, 'tipo_documento' => 'DNI', 'numero_documento' => $documento],
             [
                 'nombres' => 'Docente',
-                'apellidos' => 'Academico',
+                'apellidos' => $username,
                 'fecha_nacimiento' => '1990-01-01',
                 'sexo' => 'M',
-                'correo_electronico' => 'docente@mmm.local',
+                'correo_electronico' => $username.'@mmm.local',
                 'telefono' => '999999998',
                 'direccion' => 'Dirección docente',
                 'updated_at' => $now,
@@ -55,7 +57,7 @@ trait AuthenticatesApiUsers
             ],
         );
 
-        $memberId = \DB::table('miembros')->where('numero_documento', 'DOCENTE01')->value('id');
+        $memberId = \DB::table('miembros')->where('numero_documento', $documento)->value('id');
 
         \DB::table('usuarios')->updateOrInsert(
             ['nombre_usuario' => $username],
@@ -75,11 +77,34 @@ trait AuthenticatesApiUsers
         return $usuario;
     }
 
+    protected function createDocenteUserWithoutMiembro(string $username = 'docente.sinmiembro'): Usuario
+    {
+        $usuario = $this->createDocenteUser($username);
+        $usuario->miembro_id = null;
+        Sanctum::actingAs($usuario);
+
+        return $usuario;
+    }
+
+    protected function assignDocente(Usuario $usuario, ProgramacionAcademica $programacion): void
+    {
+        $programacion->docentes()->syncWithoutDetaching([(int) $usuario->miembro_id]);
+    }
+
     protected function actingAsCertificador(): Usuario
     {
         $this->seedInstitutionalCatalog();
         $usuario = $this->actingAsAdmin();
 
         return $usuario;
+    }
+
+    private function docenteDocumentoFor(string $username): string
+    {
+        if ($username === 'docente') {
+            return 'DOCENTE01';
+        }
+
+        return 'D'.str_pad((string) (abs(crc32($username)) % 10000000), 7, '0', STR_PAD_LEFT);
     }
 }

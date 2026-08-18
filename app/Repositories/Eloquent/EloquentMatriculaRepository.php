@@ -9,13 +9,16 @@ use App\Models\Miembro;
 use App\Models\ProgramacionAcademica;
 use App\Models\Sesion;
 use App\Repositories\Contracts\MatriculaRepositoryInterface;
+use App\Services\AcademicAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
 {
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null): LengthAwarePaginator
+    public function __construct(private AcademicAccess $academicAccess) {}
+
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return Matricula::query()
+        $query = Matricula::query()
             ->with([
                 'programacionAcademica.curso',
                 'programacionAcademica.horarios',
@@ -24,12 +27,16 @@ final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
             ])
             ->when(
                 $programacionAcademicaId !== null,
-                fn ($query) => $query->where('programacion_academica_id', $programacionAcademicaId),
+                fn ($builder) => $builder->where('programacion_academica_id', $programacionAcademicaId),
             )
             ->when(
                 $estado !== null,
-                fn ($query) => $query->where('estado', $estado),
-            )
+                fn ($builder) => $builder->where('estado', $estado),
+            );
+
+        $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+
+        return $query
             ->orderByDesc('fecha_matricula')
             ->paginate($perPage);
     }

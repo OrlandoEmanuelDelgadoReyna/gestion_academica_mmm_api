@@ -21,9 +21,9 @@ final class ProgramacionAcademicaService
         private HorarioConflictService $horarioConflict,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return $this->programaciones->paginate($perPage);
+        return $this->programaciones->paginate($perPage, $assignedMiembroId);
     }
 
     public function create(array $data, int $actor): ProgramacionAcademica

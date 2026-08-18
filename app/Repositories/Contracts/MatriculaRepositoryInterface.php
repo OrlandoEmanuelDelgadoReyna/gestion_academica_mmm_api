@@ -11,7 +11,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface MatriculaRepositoryInterface
 {
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null): LengthAwarePaginator;
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null, ?int $assignedMiembroId = null): LengthAwarePaginator;
 
     public function create(array $data): Matricula;
 

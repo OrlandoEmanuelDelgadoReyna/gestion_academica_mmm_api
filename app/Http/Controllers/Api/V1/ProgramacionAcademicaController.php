@@ -12,6 +12,8 @@ use App\Http\Requests\UpdateProgramacionAcademicaRequest;
 use App\Http\Resources\ProgramacionAcademicaResource;
 use App\Http\Resources\SesionResource;
 use App\Models\ProgramacionAcademica;
+use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\ProgramacionAcademicaService;
 use App\Services\SesionGenerationService;
 use Illuminate\Http\Request;
@@ -22,13 +24,20 @@ final class ProgramacionAcademicaController extends Controller
     public function __construct(
         private ProgramacionAcademicaService $service,
         private SesionGenerationService $sesionGeneration,
+        private AcademicAccess $academicAccess,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', ProgramacionAcademica::class);
 
-        return ProgramacionAcademicaResource::collection($this->service->paginate((int) $request->integer('per_page', 15)));
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        return ProgramacionAcademicaResource::collection($this->service->paginate(
+            (int) $request->integer('per_page', 15),
+            $this->academicAccess->listScopeMiembroId($user),
+        ));
     }
 
     public function store(StoreProgramacionAcademicaRequest $request): ProgramacionAcademicaResource

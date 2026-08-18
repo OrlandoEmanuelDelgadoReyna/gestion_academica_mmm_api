@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Services\AcademicAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,11 +17,14 @@ final class UpdateSesionRequest extends FormRequest
 
     public function rules(): array
     {
+        $user = $this->user();
+        $scheduleLocked = $user === null || ! app(AcademicAccess::class)->isGlobalAcademic($user);
+
         return [
             'programacion_academica_id' => ['prohibited'],
-            'orden' => ['sometimes', 'integer', 'min:1'],
-            'inicio_at' => ['sometimes', 'date'],
-            'fin_at' => ['sometimes', 'date'],
+            'orden' => $scheduleLocked ? ['prohibited'] : ['sometimes', 'integer', 'min:1'],
+            'inicio_at' => $scheduleLocked ? ['prohibited'] : ['sometimes', 'date'],
+            'fin_at' => $scheduleLocked ? ['prohibited'] : ['sometimes', 'date'],
             'tema' => ['nullable', 'string', 'max:255'],
             'estado' => ['sometimes', 'string', Rule::in(['programada', 'realizada', 'cancelada'])],
             'leccion_ids' => ['sometimes', 'array'],

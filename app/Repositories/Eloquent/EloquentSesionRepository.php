@@ -7,19 +7,26 @@ namespace App\Repositories\Eloquent;
 use App\Models\ProgramacionAcademica;
 use App\Models\Sesion;
 use App\Repositories\Contracts\SesionRepositoryInterface;
+use App\Services\AcademicAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 
 final class EloquentSesionRepository implements SesionRepositoryInterface
 {
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null): LengthAwarePaginator
+    public function __construct(private AcademicAccess $academicAccess) {}
+
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return Sesion::query()
+        $query = Sesion::query()
             ->with(['programacionAcademica.curso'])
             ->when(
                 $programacionAcademicaId !== null,
-                fn ($query) => $query->where('programacion_academica_id', $programacionAcademicaId),
-            )
+                fn ($builder) => $builder->where('programacion_academica_id', $programacionAcademicaId),
+            );
+
+        $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+
+        return $query
             ->orderBy('inicio_at')
             ->orderBy('fin_at')
             ->paginate($perPage);

@@ -11,7 +11,9 @@ use App\Http\Requests\UpdateAsistenciaRequest;
 use App\Http\Resources\AsistenciaResource;
 use App\Exceptions\AsistenciaQrException;
 use App\Models\Asistencia;
+use App\Models\Sesion;
 use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\AsistenciaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +21,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class AsistenciaController extends Controller
 {
-    public function __construct(private AsistenciaService $service) {}
+    public function __construct(
+        private AsistenciaService $service,
+        private AcademicAccess $academicAccess,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -32,9 +37,18 @@ final class AsistenciaController extends Controller
 
         $sesionId = isset($validated['sesion_id']) ? (int) $validated['sesion_id'] : null;
 
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        if ($sesionId !== null) {
+            $sesion = Sesion::query()->findOrFail($sesionId);
+            $this->authorize('view', $sesion);
+        }
+
         return AsistenciaResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $sesionId,
+            $this->academicAccess->listScopeMiembroId($user),
         ));
     }
 

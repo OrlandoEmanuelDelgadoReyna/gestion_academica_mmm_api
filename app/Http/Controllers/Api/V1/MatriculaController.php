@@ -12,6 +12,8 @@ use App\Http\Resources\MatriculaResource;
 use App\Models\Matricula;
 use App\Models\Miembro;
 use App\Models\ProgramacionAcademica;
+use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\MatriculaService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -19,7 +21,10 @@ use Illuminate\Validation\Rule;
 
 final class MatriculaController extends Controller
 {
-    public function __construct(private MatriculaService $service) {}
+    public function __construct(
+        private MatriculaService $service,
+        private AcademicAccess $academicAccess,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -36,10 +41,19 @@ final class MatriculaController extends Controller
             : null;
         $estado = isset($validated['estado']) ? (string) $validated['estado'] : null;
 
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        if ($programacionId !== null) {
+            $programacion = ProgramacionAcademica::query()->findOrFail($programacionId);
+            $this->authorize('view', $programacion);
+        }
+
         return MatriculaResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $programacionId,
             $estado,
+            $this->academicAccess->listScopeMiembroId($user),
         ));
     }
 
