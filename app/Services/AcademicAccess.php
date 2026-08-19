@@ -54,6 +54,23 @@ final class AcademicAccess
         return $programacion !== null && $this->isAssignedToProgramacion($user, $programacion);
     }
 
+    public function teachesCursoId(Usuario $user, int $cursoId): bool
+    {
+        if ($this->isGlobalAcademic($user)) {
+            return true;
+        }
+
+        $miembroId = $user->miembro_id;
+        if ($miembroId === null || ! $this->isDocente($user)) {
+            return false;
+        }
+
+        return ProgramacionAcademica::query()
+            ->where('curso_id', $cursoId)
+            ->whereHas('docentes', fn ($query) => $query->whereKey($miembroId))
+            ->exists();
+    }
+
     public function teachesSesion(Usuario $user, Sesion $sesion): bool
     {
         if ($this->isGlobalAcademic($user)) {

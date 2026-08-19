@@ -36,7 +36,7 @@ class Curso extends Model
 
     public function lecciones(): HasMany
     {
-        return $this->hasMany(Leccion::class);
+        return $this->hasMany(Leccion::class)->orderBy('orden');
     }
 
     public function scopeActiva(Builder $query): Builder

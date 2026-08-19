@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Exceptions\AsistenciaQrException;
 use App\Models\Asistencia;
 use App\Models\Curso;
+use App\Models\Leccion;
 use App\Models\Matricula;
 use App\Models\Miembro;
 use App\Models\ProgramacionAcademica;
@@ -401,6 +402,104 @@ final class DocenteAcademicScopeApiTest extends TestCase
             'tema' => 'Tema compartido',
         ])->assertOk()
             ->assertJsonPath('data.tema', 'Tema compartido');
+    }
+
+    public function test_docente_can_update_leccion_ids_on_own_session(): void
+    {
+        $docente = $this->createDocenteUser();
+        $own = $this->createScopeContext('OWN-LID', $docente);
+        $leccion = Leccion::query()->create([
+            'curso_id' => $own['programacion']->curso_id,
+            'orden' => 1,
+            'nombre' => 'Salvación',
+            'activo' => true,
+        ]);
+
+        $this->putJson("/api/v1/sesiones/{$own['sesion']->id}", [
+            'leccion_ids' => [$leccion->id],
+        ])->assertOk()
+            ->assertJsonPath('data.lecciones.0.id', $leccion->id);
+
+        $this->assertDatabaseHas('sesion_lecciones', [
+            'sesion_id' => $own['sesion']->id,
+            'leccion_id' => $leccion->id,
+        ]);
+    }
+
+    public function test_docente_cannot_update_leccion_ids_on_foreign_session(): void
+    {
+        $this->createDocenteUser();
+        $other = $this->createScopeContext('OTH-LID');
+        $leccion = Leccion::query()->create([
+            'curso_id' => $other['programacion']->curso_id,
+            'orden' => 1,
+            'nombre' => 'Ajena',
+            'activo' => true,
+        ]);
+
+        $this->putJson("/api/v1/sesiones/{$other['sesion']->id}", [
+            'leccion_ids' => [$leccion->id],
+        ])->assertForbidden();
+    }
+
+    public function test_docente_cannot_create_or_update_leccion_catalog(): void
+    {
+        $docente = $this->createDocenteUser();
+        $own = $this->createScopeContext('OWN-LC', $docente);
+        $leccion = Leccion::query()->create([
+            'curso_id' => $own['programacion']->curso_id,
+            'orden' => 1,
+            'nombre' => 'Fe',
+            'activo' => true,
+        ]);
+
+        $this->postJson('/api/v1/lecciones', [
+            'curso_id' => $own['programacion']->curso_id,
+            'orden' => 2,
+            'nombre' => 'No permitido',
+        ])->assertForbidden();
+
+        $this->putJson("/api/v1/lecciones/{$leccion->id}", [
+            'nombre' => 'Tampoco',
+        ])->assertForbidden();
+    }
+
+    public function test_docente_can_list_lecciones_of_assigned_curso(): void
+    {
+        $docente = $this->createDocenteUser();
+        $own = $this->createScopeContext('OWN-LL', $docente);
+        $leccion = Leccion::query()->create([
+            'curso_id' => $own['programacion']->curso_id,
+            'orden' => 1,
+            'nombre' => 'Salvación',
+            'activo' => true,
+        ]);
+
+        $ids = collect($this->getJson("/api/v1/lecciones?curso_id={$own['programacion']->curso_id}")
+            ->assertOk()
+            ->json('data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($leccion->id));
+
+        $this->getJson("/api/v1/lecciones/{$leccion->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $leccion->id);
+    }
+
+    public function test_docente_cannot_list_lecciones_of_foreign_curso(): void
+    {
+        $this->createDocenteUser();
+        $other = $this->createScopeContext('OTH-LL');
+        $leccion = Leccion::query()->create([
+            'curso_id' => $other['programacion']->curso_id,
+            'orden' => 1,
+            'nombre' => 'Ajena',
+            'activo' => true,
+        ]);
+
+        $this->getJson("/api/v1/lecciones?curso_id={$other['programacion']->curso_id}")
+            ->assertForbidden();
+        $this->getJson("/api/v1/lecciones/{$leccion->id}")->assertForbidden();
     }
 
     /**

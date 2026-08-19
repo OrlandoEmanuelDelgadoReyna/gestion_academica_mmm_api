@@ -68,6 +68,8 @@ final class SesionService
             return;
         }
 
+        $leccionIds = array_values(array_unique(array_map('intval', $data['leccion_ids'])));
+
         $cursoId = ProgramacionAcademica::query()
             ->whereKey($data['programacion_academica_id'])
             ->value('curso_id');
@@ -78,10 +80,10 @@ final class SesionService
 
         $validCount = Leccion::query()
             ->where('curso_id', $cursoId)
-            ->whereIn('id', $data['leccion_ids'])
+            ->whereIn('id', $leccionIds)
             ->count();
 
-        if ($validCount !== count($data['leccion_ids'])) {
+        if ($validCount !== count($leccionIds)) {
             throw ValidationException::withMessages(['leccion_ids' => 'Una o más lecciones no pertenecen al curso de la programación.']);
         }
     }

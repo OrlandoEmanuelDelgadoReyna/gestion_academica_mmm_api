@@ -34,7 +34,7 @@ final class EloquentSesionRepository implements SesionRepositoryInterface
 
     public function create(array $data): Sesion
     {
-        $leccionIds = $data['leccion_ids'] ?? null;
+        $leccionIds = $this->normalizeLeccionIds($data['leccion_ids'] ?? null);
         unset($data['leccion_ids']);
 
         $sesion = Sesion::query()->create($data);
@@ -48,7 +48,7 @@ final class EloquentSesionRepository implements SesionRepositoryInterface
 
     public function update(Sesion $sesion, array $data): Sesion
     {
-        $leccionIds = $data['leccion_ids'] ?? null;
+        $leccionIds = $this->normalizeLeccionIds($data['leccion_ids'] ?? null);
         unset($data['leccion_ids']);
 
         $sesion->update($data);
@@ -68,5 +68,19 @@ final class EloquentSesionRepository implements SesionRepositoryInterface
             ->orderBy('fin_at')
             ->lockForUpdate()
             ->get();
+    }
+
+    /** @return list<int>|null */
+    private function normalizeLeccionIds(mixed $leccionIds): ?array
+    {
+        if ($leccionIds === null) {
+            return null;
+        }
+
+        if (! is_array($leccionIds)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('intval', $leccionIds)));
     }
 }

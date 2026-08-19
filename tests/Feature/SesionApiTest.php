@@ -131,6 +131,106 @@ final class SesionApiTest extends TestCase
         ]);
     }
 
+    public function test_assign_one_leccion_to_sesion(): void
+    {
+        [$programacion, $sesion] = $this->createProgramacionWithSesion('SES-API-8', 'G8');
+        $leccion = $this->createLeccion($programacion->curso_id, 1, 'Salvación');
+
+        $this->putJson("/api/v1/sesiones/{$sesion->id}", [
+            'leccion_ids' => [$leccion->id],
+        ])->assertOk()
+            ->assertJsonPath('data.lecciones.0.id', $leccion->id)
+            ->assertJsonPath('data.lecciones.0.nombre', 'Salvación')
+            ->assertJsonMissingPath('data.lecciones.0.pivot');
+
+        $this->assertDatabaseHas('sesion_lecciones', [
+            'sesion_id' => $sesion->id,
+            'leccion_id' => $leccion->id,
+        ]);
+    }
+
+    public function test_assign_multiple_lecciones_to_sesion_ordered_by_curso_orden(): void
+    {
+        [$programacion, $sesion] = $this->createProgramacionWithSesion('SES-API-9', 'G9');
+        $segunda = $this->createLeccion($programacion->curso_id, 2, 'Arrepentimiento');
+        $primera = $this->createLeccion($programacion->curso_id, 1, 'Salvación');
+
+        $nombres = $this->putJson("/api/v1/sesiones/{$sesion->id}", [
+            'leccion_ids' => [$segunda->id, $primera->id],
+        ])->assertOk()
+            ->json('data.lecciones');
+
+        $this->assertSame(
+            ['Salvación', 'Arrepentimiento'],
+            collect($nombres)->pluck('nombre')->all(),
+        );
+        $this->assertDatabaseCount('sesion_lecciones', 2);
+    }
+
+    public function test_empty_leccion_ids_clears_assignments_without_deleting_lessons(): void
+    {
+        [$programacion, $sesion] = $this->createProgramacionWithSesion('SES-API-10', 'G10');
+        $leccion = $this->createLeccion($programacion->curso_id, 1, 'Fe');
+        $sesion->lecciones()->sync([$leccion->id]);
+
+        $this->putJson("/api/v1/sesiones/{$sesion->id}", [
+            'leccion_ids' => [],
+        ])->assertOk()
+            ->assertJsonPath('data.lecciones', []);
+
+        $this->assertDatabaseMissing('sesion_lecciones', [
+            'sesion_id' => $sesion->id,
+            'leccion_id' => $leccion->id,
+        ]);
+        $this->assertDatabaseHas('lecciones', ['id' => $leccion->id, 'nombre' => 'Fe']);
+    }
+
+    public function test_leccion_from_another_curso_is_rejected(): void
+    {
+        [$programacion, $sesion] = $this->createProgramacionWithSesion('SES-API-11', 'G11');
+        [$otra] = $this->createProgramacionWithSesion('SES-API-12', 'G12');
+        $propia = $this->createLeccion($programacion->curso_id, 1, 'Propia');
+        $ajena = $this->createLeccion($otra->curso_id, 1, 'Ajena');
+        $sesion->lecciones()->sync([$propia->id]);
+
+        $this->putJson("/api/v1/sesiones/{$sesion->id}", [
+            'leccion_ids' => [$ajena->id],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['leccion_ids']);
+
+        $this->assertDatabaseHas('sesion_lecciones', [
+            'sesion_id' => $sesion->id,
+            'leccion_id' => $propia->id,
+        ]);
+        $this->assertDatabaseMissing('sesion_lecciones', [
+            'sesion_id' => $sesion->id,
+            'leccion_id' => $ajena->id,
+        ]);
+    }
+
+    public function test_show_session_includes_assigned_lecciones(): void
+    {
+        [$programacion, $sesion] = $this->createProgramacionWithSesion('SES-API-13', 'G13');
+        $leccion = $this->createLeccion($programacion->curso_id, 1, 'Salvación');
+        $sesion->lecciones()->sync([$leccion->id]);
+
+        $this->getJson("/api/v1/sesiones/{$sesion->id}")
+            ->assertOk()
+            ->assertJsonPath('data.lecciones.0.id', $leccion->id)
+            ->assertJsonPath('data.lecciones.0.orden', 1)
+            ->assertJsonMissingPath('data.lecciones.0.pivot');
+    }
+
+    private function createLeccion(int $cursoId, int $orden, string $nombre): Leccion
+    {
+        return Leccion::query()->create([
+            'curso_id' => $cursoId,
+            'orden' => $orden,
+            'nombre' => $nombre,
+            'activo' => true,
+        ]);
+    }
+
     /** @return array{0: ProgramacionAcademica, 1: Sesion} */
     private function createProgramacionWithSesion(string $cursoCodigo, string $grupo = 'A'): array
     {

@@ -31,7 +31,9 @@ class Sesion extends Model
 
     public function lecciones(): BelongsToMany
     {
-        return $this->belongsToMany(Leccion::class, 'sesion_lecciones')->withTimestamps();
+        return $this->belongsToMany(Leccion::class, 'sesion_lecciones')
+            ->withTimestamps()
+            ->orderBy('lecciones.orden');
     }
 
     public function asistencias(): HasMany

@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\EntregaTareaController;
 use App\Http\Controllers\Api\V1\EventoController;
 use App\Http\Controllers\Api\V1\ExamenFinalController;
 use App\Http\Controllers\Api\V1\IglesiaController;
+use App\Http\Controllers\Api\V1\LeccionController;
 use App\Http\Controllers\Api\V1\MaterialController;
 use App\Http\Controllers\Api\V1\MatriculaController;
 use App\Http\Controllers\Api\V1\IntentoExamenController;
@@ -53,6 +54,9 @@ Route::prefix('v1')->group(function (): void {
         Route::post('miembros/{miembro}/transiciones', [MiembroController::class, 'transition']);
 
         Route::apiResource('cursos', CursoController::class)->only(['index', 'store', 'show', 'update']);
+        Route::apiResource('lecciones', LeccionController::class)
+            ->parameters(['lecciones' => 'leccion'])
+            ->only(['index', 'store', 'show', 'update']);
         Route::apiResource('programaciones-academicas', ProgramacionAcademicaController::class)
             ->parameters(['programaciones-academicas' => 'programacionAcademica'])
             ->only(['index', 'store', 'show', 'update']);

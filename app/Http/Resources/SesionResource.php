@@ -22,7 +22,10 @@ final class SesionResource extends JsonResource
             'tema' => $this->tema,
             'estado' => $this->estado,
             'programacion_academica' => new ProgramacionAcademicaResource($this->whenLoaded('programacionAcademica')),
-            'lecciones' => $this->whenLoaded('lecciones'),
+            'lecciones' => $this->whenLoaded(
+                'lecciones',
+                fn () => LeccionResource::collection($this->lecciones),
+            ),
         ];
     }
 }
