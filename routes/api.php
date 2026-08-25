@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\ReporteController;
 use App\Http\Controllers\Api\V1\RolController;
 use App\Http\Controllers\Api\V1\SesionController;
 use App\Http\Controllers\Api\V1\TareaController;
+use App\Http\Controllers\Api\V1\TipoMaterialController;
 use App\Http\Controllers\Api\V1\UsuarioController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +73,9 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('asistencias', AsistenciaController::class)
             ->parameters(['asistencias' => 'asistencia'])
             ->only(['index', 'store', 'show', 'update']);
+        Route::get('tipos-material', [TipoMaterialController::class, 'index']);
+        Route::get('materiales/{material}/descargar', [MaterialController::class, 'descargar']);
+        Route::post('materiales/{material}', [MaterialController::class, 'update']);
         Route::apiResource('materiales', MaterialController::class)
             ->parameters(['materiales' => 'material'])
             ->only(['index', 'store', 'show', 'update']);

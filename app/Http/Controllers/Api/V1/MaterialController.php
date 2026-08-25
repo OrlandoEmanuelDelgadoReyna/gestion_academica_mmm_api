@@ -13,8 +13,14 @@ use App\Models\ProgramacionAcademica;
 use App\Models\Usuario;
 use App\Services\AcademicAccess;
 use App\Services\MaterialService;
+use App\Support\MaterialStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 final class MaterialController extends Controller
 {
@@ -70,5 +76,28 @@ final class MaterialController extends Controller
         $data = $request->safe()->except('archivo');
 
         return new MaterialResource($this->service->update($material, $data, $request->user()->id, $request->file('archivo')));
+    }
+
+    public function descargar(Material $material): StreamedResponse
+    {
+        $this->authorize('view', $material);
+
+        if (MaterialStorage::isExternalUrl($material->ruta_recurso)) {
+            throw new UnprocessableEntityHttpException('Este material es un enlace externo.');
+        }
+
+        if (! MaterialStorage::exists($material->ruta_recurso)) {
+            throw new NotFoundHttpException('El archivo del material no está disponible.');
+        }
+
+        $extension = pathinfo((string) $material->ruta_recurso, PATHINFO_EXTENSION);
+        $basename = Str::slug($material->titulo) ?: 'material';
+        $downloadName = $extension !== '' ? $basename.'.'.$extension : $basename;
+
+        return Storage::disk(MaterialStorage::DISK)->download(
+            $material->ruta_recurso,
+            $downloadName,
+            ['X-Content-Type-Options' => 'nosniff'],
+        );
     }
 }

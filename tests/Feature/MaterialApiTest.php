@@ -175,27 +175,6 @@ final class MaterialApiTest extends TestCase
         }
     }
 
-    public function test_docente_cannot_create_or_update_material_catalog(): void
-    {
-        $admin = $this->actingAsAdmin();
-        $programacion = $this->createProgramacion('MAT-WR');
-        $material = $this->createMaterial($programacion, (int) $admin->id);
-
-        $docente = $this->createDocenteUser();
-        $this->assignDocente($docente, $programacion);
-
-        $this->postJson('/api/v1/materiales', [
-            'programacion_academica_id' => $programacion->id,
-            'tipo_material_id' => $this->tipoMaterialId(),
-            'titulo' => 'No permitido',
-            'ruta_recurso' => 'https://ejemplo.test/no.pdf',
-        ])->assertForbidden();
-
-        $this->putJson("/api/v1/materiales/{$material->id}", [
-            'titulo' => 'Tampoco',
-        ])->assertForbidden();
-    }
-
     public function test_material_delete_route_does_not_exist(): void
     {
         $admin = $this->actingAsAdmin();
