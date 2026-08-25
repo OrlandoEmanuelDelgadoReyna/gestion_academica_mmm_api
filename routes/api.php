@@ -72,7 +72,9 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('asistencias', AsistenciaController::class)
             ->parameters(['asistencias' => 'asistencia'])
             ->only(['index', 'store', 'show', 'update']);
-        Route::apiResource('materiales', MaterialController::class)->only(['index', 'store', 'show', 'update']);
+        Route::apiResource('materiales', MaterialController::class)
+            ->parameters(['materiales' => 'material'])
+            ->only(['index', 'store', 'show', 'update']);
 
         Route::apiResource('tareas', TareaController::class);
         Route::apiResource('entregas-tarea', EntregaTareaController::class)->only(['store', 'show', 'update']);

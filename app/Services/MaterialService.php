@@ -21,9 +21,9 @@ final class MaterialService
         private AuditoriaRepositoryInterface $auditorias,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return $this->materiales->paginate($perPage);
+        return $this->materiales->paginate($perPage, $programacionAcademicaId, $assignedMiembroId);
     }
 
     public function create(array $data, int $actor, ?UploadedFile $archivo = null): Material

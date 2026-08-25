@@ -6,15 +6,27 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\Material;
 use App\Repositories\Contracts\MaterialRepositoryInterface;
+use App\Services\AcademicAccess;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 final class EloquentMaterialRepository implements MaterialRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator
+    public function __construct(private AcademicAccess $academicAccess) {}
+
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
     {
-        return Material::query()
+        $query = Material::query()
             ->with(['programacionAcademica.curso', 'tipoMaterial'])
+            ->when(
+                $programacionAcademicaId !== null,
+                fn ($builder) => $builder->where('programacion_academica_id', $programacionAcademicaId),
+            );
+
+        $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+
+        return $query
             ->orderByDesc('publicado_at')
+            ->orderBy('id')
             ->paginate($perPage);
     }
 

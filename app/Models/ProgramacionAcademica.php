@@ -61,6 +61,11 @@ class ProgramacionAcademica extends Model
         return $this->hasMany(Matricula::class);
     }
 
+    public function materiales(): HasMany
+    {
+        return $this->hasMany(Material::class);
+    }
+
     public function tareas(): HasMany
     {
         return $this->hasMany(Tarea::class);

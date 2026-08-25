@@ -9,19 +9,46 @@ use App\Http\Requests\StoreMaterialRequest;
 use App\Http\Requests\UpdateMaterialRequest;
 use App\Http\Resources\MaterialResource;
 use App\Models\Material;
+use App\Models\ProgramacionAcademica;
+use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\MaterialService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class MaterialController extends Controller
 {
-    public function __construct(private MaterialService $service) {}
+    public function __construct(
+        private MaterialService $service,
+        private AcademicAccess $academicAccess,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Material::class);
 
-        return MaterialResource::collection($this->service->paginate((int) $request->integer('per_page', 15)));
+        $validated = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'programacion_academica_id' => ['sometimes', 'integer', 'exists:programaciones_academicas,id'],
+        ]);
+
+        $programacionId = isset($validated['programacion_academica_id'])
+            ? (int) $validated['programacion_academica_id']
+            : null;
+
+        /** @var Usuario $user */
+        $user = $request->user();
+
+        if ($programacionId !== null) {
+            $programacion = ProgramacionAcademica::query()->findOrFail($programacionId);
+            $this->authorize('view', $programacion);
+        }
+
+        return MaterialResource::collection($this->service->paginate(
+            (int) ($validated['per_page'] ?? 15),
+            $programacionId,
+            $this->academicAccess->listScopeMiembroId($user),
+        ));
     }
 
     public function store(StoreMaterialRequest $request): MaterialResource

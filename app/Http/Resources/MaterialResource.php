@@ -23,7 +23,7 @@ final class MaterialResource extends JsonResource
             'publicado_at' => $this->publicado_at?->toIso8601String(),
             'creado_por_usuario_id' => $this->creado_por_usuario_id,
             'programacion_academica' => new ProgramacionAcademicaResource($this->whenLoaded('programacionAcademica')),
-            'tipo_material' => $this->whenLoaded('tipoMaterial'),
+            'tipo_material' => new TipoMaterialResource($this->whenLoaded('tipoMaterial')),
         ];
     }
 }
