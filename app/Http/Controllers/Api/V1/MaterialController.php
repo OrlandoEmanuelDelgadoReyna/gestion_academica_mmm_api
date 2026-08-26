@@ -53,7 +53,8 @@ final class MaterialController extends Controller
         return MaterialResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $programacionId,
-            $this->academicAccess->listScopeMiembroId($user),
+            $this->academicAccess->teacherListMiembroId($user),
+            $this->academicAccess->studentListMiembroId($user),
         ));
     }
 

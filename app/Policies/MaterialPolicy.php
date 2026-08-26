@@ -15,12 +15,12 @@ final class MaterialPolicy
 
     public function viewAny(Usuario $user): bool
     {
-        return $this->access->canViewAssignedLists($user);
+        return $this->access->canViewAcademicLists($user);
     }
 
     public function view(Usuario $user, Material $material): bool
     {
-        return $this->access->teachesProgramacionId($user, (int) $material->programacion_academica_id);
+        return $this->access->canViewProgramacionId($user, (int) $material->programacion_academica_id);
     }
 
     public function create(Usuario $user, ?ProgramacionAcademica $programacion = null): bool

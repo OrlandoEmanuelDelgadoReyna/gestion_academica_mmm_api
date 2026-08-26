@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Asistencia;
+use App\Models\Matricula;
 use App\Models\ProgramacionAcademica;
 use App\Models\Sesion;
 use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Builder;
 
-/** Central academic authorization: global managers vs assigned teachers. */
+/** Central academic authorization: global managers, assigned teachers, enrolled students. */
 final class AcademicAccess
 {
     public function isGlobalAcademic(Usuario $user): bool
@@ -32,6 +33,68 @@ final class AcademicAccess
     {
         return $this->isGlobalAcademic($user)
             || ($this->isDocente($user) && $user->miembro_id !== null);
+    }
+
+    public function canViewAcademicLists(Usuario $user): bool
+    {
+        return $this->canViewAssignedLists($user) || $this->hasAnyActiveEnrollment($user);
+    }
+
+    /**
+     * Active enrollment of the authenticated member in a programming.
+     * Does not use programacion_docentes or historical enrollment rows.
+     */
+    public function hasActiveEnrollment(Usuario $user, int $programacionAcademicaId): bool
+    {
+        $miembroId = $user->miembro_id;
+        if ($miembroId === null) {
+            return false;
+        }
+
+        return Matricula::query()
+            ->where('miembro_id', $miembroId)
+            ->where('programacion_academica_id', $programacionAcademicaId)
+            ->where('estado', 'activa')
+            ->exists();
+    }
+
+    public function hasAnyActiveEnrollment(Usuario $user): bool
+    {
+        $miembroId = $user->miembro_id;
+        if ($miembroId === null) {
+            return false;
+        }
+
+        return Matricula::query()
+            ->where('miembro_id', $miembroId)
+            ->where('estado', 'activa')
+            ->exists();
+    }
+
+    public function canViewProgramacionId(Usuario $user, int $programacionId): bool
+    {
+        return $this->teachesProgramacionId($user, $programacionId)
+            || $this->hasActiveEnrollment($user, $programacionId);
+    }
+
+    /** Teacher list scope. Null means unscoped (global academic). Never used for students. */
+    public function teacherListMiembroId(Usuario $user): ?int
+    {
+        if ($this->isGlobalAcademic($user) || ! $this->isDocente($user)) {
+            return null;
+        }
+
+        return $user->miembro_id !== null ? (int) $user->miembro_id : null;
+    }
+
+    /** Student list scope. Null unless the user is a non-teacher, non-manager member. */
+    public function studentListMiembroId(Usuario $user): ?int
+    {
+        if ($this->isGlobalAcademic($user) || $this->isDocente($user)) {
+            return null;
+        }
+
+        return $user->miembro_id !== null ? (int) $user->miembro_id : null;
     }
 
     public function teachesProgramacion(Usuario $user, ProgramacionAcademica $programacion): bool
@@ -124,6 +187,24 @@ final class AcademicAccess
         $query->whereIn($column, $this->assignedProgramacionIdsQuery($assignedMiembroId));
     }
 
+    public function constrainByActiveEnrollment(Builder $query, ?int $enrolledMiembroId, string $column = 'programacion_academica_id'): void
+    {
+        if ($enrolledMiembroId === null) {
+            return;
+        }
+
+        $query->whereIn($column, $this->enrolledProgramacionIdsQuery($enrolledMiembroId));
+    }
+
+    public function constrainOwnActiveMatriculas(Builder $query, ?int $enrolledMiembroId): void
+    {
+        if ($enrolledMiembroId === null) {
+            return;
+        }
+
+        $query->where('miembro_id', $enrolledMiembroId)->where('estado', 'activa');
+    }
+
     public function constrainAsistencias(Builder $query, ?int $assignedMiembroId): void
     {
         if ($assignedMiembroId === null) {
@@ -168,6 +249,17 @@ final class AcademicAccess
             $sub->select('programacion_academica_id')
                 ->from('programacion_docentes')
                 ->where('miembro_id', $miembroId);
+        };
+    }
+
+    /** @return \Closure */
+    private function enrolledProgramacionIdsQuery(int $miembroId): \Closure
+    {
+        return function ($sub) use ($miembroId): void {
+            $sub->select('programacion_academica_id')
+                ->from('matriculas')
+                ->where('miembro_id', $miembroId)
+                ->where('estado', 'activa');
         };
     }
 }

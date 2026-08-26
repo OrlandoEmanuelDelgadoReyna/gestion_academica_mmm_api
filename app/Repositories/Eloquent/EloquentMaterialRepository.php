@@ -13,7 +13,7 @@ final class EloquentMaterialRepository implements MaterialRepositoryInterface
 {
     public function __construct(private AcademicAccess $academicAccess) {}
 
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
     {
         $query = Material::query()
             ->with(['programacionAcademica.curso', 'tipoMaterial'])
@@ -23,6 +23,7 @@ final class EloquentMaterialRepository implements MaterialRepositoryInterface
             );
 
         $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+        $this->academicAccess->constrainByActiveEnrollment($query, $enrolledMiembroId);
 
         return $query
             ->orderByDesc('publicado_at')

@@ -14,12 +14,12 @@ final class SesionPolicy
 
     public function viewAny(Usuario $user): bool
     {
-        return $this->access->canViewAssignedLists($user);
+        return $this->access->canViewAcademicLists($user);
     }
 
     public function view(Usuario $user, Sesion $sesion): bool
     {
-        return $this->access->teachesSesion($user, $sesion);
+        return $this->access->canViewProgramacionId($user, (int) $sesion->programacion_academica_id);
     }
 
     public function create(Usuario $user): bool
@@ -28,6 +28,11 @@ final class SesionPolicy
     }
 
     public function update(Usuario $user, Sesion $sesion): bool
+    {
+        return $this->access->teachesSesion($user, $sesion);
+    }
+
+    public function qr(Usuario $user, Sesion $sesion): bool
     {
         return $this->access->teachesSesion($user, $sesion);
     }

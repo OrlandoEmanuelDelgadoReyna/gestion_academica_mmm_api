@@ -363,9 +363,9 @@ final class MaterialFileApiTest extends TestCase
             {
                 public function __construct(private MaterialRepositoryInterface $inner) {}
 
-                public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
+                public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
                 {
-                    return $this->inner->paginate($perPage, $programacionAcademicaId, $assignedMiembroId);
+                    return $this->inner->paginate($perPage, $programacionAcademicaId, $assignedMiembroId, $enrolledMiembroId);
                 }
 
                 public function create(array $data): Material

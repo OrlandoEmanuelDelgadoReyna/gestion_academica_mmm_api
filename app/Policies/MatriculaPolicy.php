@@ -14,12 +14,18 @@ final class MatriculaPolicy
 
     public function viewAny(Usuario $user): bool
     {
-        return $this->access->canViewAssignedLists($user);
+        return $this->access->canViewAcademicLists($user);
     }
 
     public function view(Usuario $user, Matricula $matricula): bool
     {
-        return $this->access->teachesProgramacionId($user, (int) $matricula->programacion_academica_id);
+        if ($this->access->teachesProgramacionId($user, (int) $matricula->programacion_academica_id)) {
+            return true;
+        }
+
+        return $user->miembro_id !== null
+            && (int) $matricula->miembro_id === (int) $user->miembro_id
+            && $matricula->estado === 'activa';
     }
 
     public function create(Usuario $user): bool

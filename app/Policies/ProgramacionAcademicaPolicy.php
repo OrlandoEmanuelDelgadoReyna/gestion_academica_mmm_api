@@ -14,12 +14,12 @@ final class ProgramacionAcademicaPolicy
 
     public function viewAny(Usuario $user): bool
     {
-        return $this->access->canViewAssignedLists($user);
+        return $this->access->canViewAcademicLists($user);
     }
 
     public function view(Usuario $user, ProgramacionAcademica $programacionAcademica): bool
     {
-        return $this->access->teachesProgramacion($user, $programacionAcademica);
+        return $this->access->canViewProgramacionId($user, (int) $programacionAcademica->id);
     }
 
     public function create(Usuario $user): bool

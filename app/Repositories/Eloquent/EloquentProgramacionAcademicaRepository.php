@@ -17,12 +17,13 @@ final class EloquentProgramacionAcademicaRepository implements ProgramacionAcade
         private AcademicAccess $academicAccess,
     ) {}
 
-    public function paginate(int $perPage, ?int $assignedMiembroId = null): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
     {
         $query = ProgramacionAcademica::query()
             ->with(['curso', 'aula', 'horarios']);
 
         $this->academicAccess->constrainProgramaciones($query, $assignedMiembroId);
+        $this->academicAccess->constrainByActiveEnrollment($query, $enrolledMiembroId, 'id');
 
         return $query
             ->orderByDesc('fecha_inicio')

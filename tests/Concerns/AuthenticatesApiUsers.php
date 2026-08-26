@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Models\Matricula;
 use App\Models\ProgramacionAcademica;
 use App\Models\Usuario;
 use Database\Seeders\InstitutionalCatalogSeeder;
@@ -89,6 +90,53 @@ trait AuthenticatesApiUsers
     protected function assignDocente(Usuario $usuario, ProgramacionAcademica $programacion): void
     {
         $programacion->docentes()->syncWithoutDetaching([(int) $usuario->miembro_id]);
+    }
+
+    /** Creates a member user with no academic role (student access via matrícula activa). */
+    protected function createAlumnoUser(string $username = 'alumno'): Usuario
+    {
+        $this->seedInstitutionalCatalog();
+
+        $church = \DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
+        $now = now();
+        $documento = 'A'.str_pad((string) (abs(crc32($username)) % 10000000), 7, '0', STR_PAD_LEFT);
+
+        \DB::table('miembros')->updateOrInsert(
+            ['iglesia_id' => $church, 'tipo_documento' => 'DNI', 'numero_documento' => $documento],
+            [
+                'nombres' => 'Alumno',
+                'apellidos' => $username,
+                'fecha_nacimiento' => '2000-01-01',
+                'sexo' => 'M',
+                'correo_electronico' => $username.'@mmm.local',
+                'telefono' => '966666666',
+                'direccion' => 'Dirección alumno',
+                'updated_at' => $now,
+                'created_at' => $now,
+            ],
+        );
+
+        $memberId = \DB::table('miembros')->where('numero_documento', $documento)->value('id');
+
+        \DB::table('usuarios')->updateOrInsert(
+            ['nombre_usuario' => $username],
+            ['miembro_id' => $memberId, 'contrasena' => Hash::make('Admin123*'), 'activo' => true, 'updated_at' => $now, 'created_at' => $now],
+        );
+
+        $usuario = Usuario::query()->where('nombre_usuario', $username)->firstOrFail();
+        Sanctum::actingAs($usuario);
+
+        return $usuario;
+    }
+
+    protected function enrollAlumno(Usuario $usuario, ProgramacionAcademica $programacion, string $estado = 'activa'): Matricula
+    {
+        return Matricula::query()->create([
+            'programacion_academica_id' => $programacion->id,
+            'miembro_id' => $usuario->miembro_id,
+            'fecha_matricula' => now(),
+            'estado' => $estado,
+        ]);
     }
 
     protected function actingAsCertificador(): Usuario

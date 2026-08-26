@@ -16,7 +16,7 @@ final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
 {
     public function __construct(private AcademicAccess $academicAccess) {}
 
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null, ?int $assignedMiembroId = null): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?string $estado = null, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
     {
         $query = Matricula::query()
             ->with([
@@ -30,11 +30,12 @@ final class EloquentMatriculaRepository implements MatriculaRepositoryInterface
                 fn ($builder) => $builder->where('programacion_academica_id', $programacionAcademicaId),
             )
             ->when(
-                $estado !== null,
+                $estado !== null && $enrolledMiembroId === null,
                 fn ($builder) => $builder->where('estado', $estado),
             );
 
         $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+        $this->academicAccess->constrainOwnActiveMatriculas($query, $enrolledMiembroId);
 
         return $query
             ->orderByDesc('fecha_matricula')

@@ -53,7 +53,8 @@ final class MatriculaController extends Controller
             (int) ($validated['per_page'] ?? 15),
             $programacionId,
             $estado,
-            $this->academicAccess->listScopeMiembroId($user),
+            $this->academicAccess->teacherListMiembroId($user),
+            $this->academicAccess->studentListMiembroId($user),
         ));
     }
 

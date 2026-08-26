@@ -47,7 +47,8 @@ final class SesionController extends Controller
         return SesionResource::collection($this->service->paginate(
             (int) $request->integer('per_page', 15),
             ($programacionId !== null && $programacionId > 0) ? $programacionId : null,
-            $this->academicAccess->listScopeMiembroId($user),
+            $this->academicAccess->teacherListMiembroId($user),
+            $this->academicAccess->studentListMiembroId($user),
         ));
     }
 
@@ -70,7 +71,7 @@ final class SesionController extends Controller
 
     public function qr(Sesion $sesion): JsonResponse
     {
-        $this->authorize('view', $sesion);
+        $this->authorize('qr', $sesion);
 
         $sesion->load(['programacionAcademica.curso']);
         $token = $this->qrTokens->issue($sesion);

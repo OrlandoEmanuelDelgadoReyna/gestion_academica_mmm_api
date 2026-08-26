@@ -15,7 +15,7 @@ final class EloquentSesionRepository implements SesionRepositoryInterface
 {
     public function __construct(private AcademicAccess $academicAccess) {}
 
-    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null): LengthAwarePaginator
+    public function paginate(int $perPage, ?int $programacionAcademicaId = null, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
     {
         $query = Sesion::query()
             ->with(['programacionAcademica.curso'])
@@ -25,6 +25,7 @@ final class EloquentSesionRepository implements SesionRepositoryInterface
             );
 
         $this->academicAccess->constrainByAssignedProgramacion($query, $assignedMiembroId);
+        $this->academicAccess->constrainByActiveEnrollment($query, $enrolledMiembroId);
 
         return $query
             ->orderBy('inicio_at')

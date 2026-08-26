@@ -36,7 +36,8 @@ final class ProgramacionAcademicaController extends Controller
 
         return ProgramacionAcademicaResource::collection($this->service->paginate(
             (int) $request->integer('per_page', 15),
-            $this->academicAccess->listScopeMiembroId($user),
+            $this->academicAccess->teacherListMiembroId($user),
+            $this->academicAccess->studentListMiembroId($user),
         ));
     }
 
