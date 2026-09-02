@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\NotificacionController;
 use App\Http\Controllers\Api\V1\ParticipacionCultoController;
 use App\Http\Controllers\Api\V1\PermisoController;
 use App\Http\Controllers\Api\V1\ProgramacionAcademicaController;
+use App\Http\Controllers\Api\V1\RecuperacionContrasenaController;
 use App\Http\Controllers\Api\V1\ReporteController;
 use App\Http\Controllers\Api\V1\RolController;
 use App\Http\Controllers\Api\V1\SesionController;
@@ -36,6 +37,10 @@ Route::prefix('v1')->group(function (): void {
     Route::get('certificados/verificar/{codigo}', [CertificadoController::class, 'verificar']);
 
     Route::post('login', [AutenticacionController::class, 'login'])->middleware('throttle:login');
+    Route::post('recuperacion-contrasena', [RecuperacionContrasenaController::class, 'solicitar'])
+        ->middleware('throttle:password-recovery');
+    Route::post('recuperacion-contrasena/verificar', [RecuperacionContrasenaController::class, 'verificar'])
+        ->middleware('throttle:password-recovery-verify');
 
     Route::middleware(['auth:sanctum', 'usuario.activo'])->group(function (): void {
         Route::post('logout', [AutenticacionController::class, 'logout']);
@@ -81,15 +86,32 @@ Route::prefix('v1')->group(function (): void {
             ->only(['index', 'store', 'show', 'update']);
 
         Route::apiResource('tareas', TareaController::class);
-        Route::apiResource('entregas-tarea', EntregaTareaController::class)->only(['store', 'show', 'update']);
-        Route::apiResource('examenes-finales', ExamenFinalController::class);
+        Route::get('entregas-tarea/{entregaTarea}/descargar', [EntregaTareaController::class, 'descargar']);
+        Route::put('entregas-tarea/{entregaTarea}/calificar', [EntregaTareaController::class, 'calificar']);
+        Route::post('entregas-tarea/{entregaTarea}', [EntregaTareaController::class, 'update']);
+        Route::apiResource('entregas-tarea', EntregaTareaController::class)
+            ->parameters(['entregas-tarea' => 'entregaTarea'])
+            ->only(['index', 'store', 'show', 'update']);
+        Route::apiResource('examenes-finales', ExamenFinalController::class)
+            ->parameters(['examenes-finales' => 'examenFinal']);
+        Route::get('examenes-finales/{examenFinal}/preguntas', [ExamenFinalController::class, 'preguntas']);
+        Route::post('examenes-finales/{examenFinal}/preguntas', [ExamenFinalController::class, 'storePregunta']);
+        Route::put('preguntas-examen/{preguntaExamen}', [ExamenFinalController::class, 'updatePregunta']);
+        Route::delete('preguntas-examen/{preguntaExamen}', [ExamenFinalController::class, 'destroyPregunta']);
+        Route::get('examenes-finales/{examenFinal}/notas', [ExamenFinalController::class, 'notas']);
+        Route::put('examenes-finales/{examenFinal}/notas/{matricula}', [ExamenFinalController::class, 'registrarNota']);
+        Route::get('examenes-finales/{examenFinal}/recuperaciones', [ExamenFinalController::class, 'solicitudes']);
+        Route::post('examenes-finales/{examenFinal}/recuperacion', [ExamenFinalController::class, 'solicitarRecuperacion']);
+        Route::put('solicitudes-recuperacion-examen/{solicitudRecuperacionExamen}', [ExamenFinalController::class, 'atenderSolicitud']);
         Route::apiResource('criterios-evaluacion', CriterioEvaluacionController::class);
         Route::post('intentos-examen/iniciar', [IntentoExamenController::class, 'iniciar']);
         Route::post('intentos-examen/{intento_examen}/enviar', [IntentoExamenController::class, 'enviar']);
         Route::get('intentos-examen/{intento_examen}', [IntentoExamenController::class, 'show']);
         Route::post('matriculas/{matricula}/calificaciones/calcular', [CalificacionController::class, 'calcular']);
 
+        Route::get('certificados/elegibilidad', [CertificadoController::class, 'elegibilidad']);
         Route::get('certificados', [CertificadoController::class, 'index']);
+        Route::get('certificados/{certificado}/descargar', [CertificadoController::class, 'descargar']);
         Route::get('certificados/{certificado}', [CertificadoController::class, 'show']);
         Route::post('certificados/emitir', [CertificadoController::class, 'emitir']);
         Route::post('certificados/{certificado}/revocar', [CertificadoController::class, 'revocar']);
@@ -99,7 +121,11 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('bloques-culto', BloqueCultoController::class)->parameters(['bloques-culto' => 'bloque_culto']);
         Route::apiResource('participaciones-culto', ParticipacionCultoController::class)->parameters(['participaciones-culto' => 'participacion_culto']);
         Route::apiResource('eventos', EventoController::class);
+        Route::get('anuncios/publicados', [AnuncioController::class, 'publicados']);
         Route::apiResource('anuncios', AnuncioController::class);
+        Route::get('notificaciones/mis', [NotificacionController::class, 'inbox']);
+        Route::get('notificaciones/no-leidas/count', [NotificacionController::class, 'unreadCount']);
+        Route::post('notificaciones/marcar-todas-leidas', [NotificacionController::class, 'marcarTodasLeidas']);
         Route::apiResource('notificaciones', NotificacionController::class);
         Route::post('notificaciones/{notificacion}/enviar', [NotificacionController::class, 'enviar']);
         Route::post('notificaciones/{notificacion}/leida', [NotificacionController::class, 'marcarLeida']);

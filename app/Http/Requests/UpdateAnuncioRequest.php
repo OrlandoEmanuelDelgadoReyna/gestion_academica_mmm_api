@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\Anuncio;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class UpdateAnuncioRequest extends FormRequest
 {
@@ -18,7 +20,7 @@ final class UpdateAnuncioRequest extends FormRequest
         return [
             'titulo' => ['sometimes', 'string', 'max:150'],
             'contenido' => ['sometimes', 'string'],
-            'estado' => ['sometimes', 'string', 'max:30'],
+            'estado' => ['sometimes', 'string', Rule::in(Anuncio::ESTADOS)],
             'publicado_at' => ['nullable', 'date'],
             'vence_at' => ['nullable', 'date', 'after_or_equal:publicado_at'],
         ];

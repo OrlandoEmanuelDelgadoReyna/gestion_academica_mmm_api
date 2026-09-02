@@ -19,10 +19,9 @@ final class EmitirCertificadoRequest extends FormRequest
         return [
             'miembro_id' => ['required', 'integer', 'exists:miembros,id'],
             'tipo_certificado_id' => ['required', 'integer', 'exists:tipos_certificado,id'],
-            'programacion_academica_id' => ['required', 'integer', 'exists:programaciones_academicas,id'],
+            'programacion_academica_id' => ['nullable', 'integer', 'exists:programaciones_academicas,id'],
             'destinatario' => ['nullable', 'string', 'max:150'],
             'vence_at' => ['nullable', 'date'],
-            'ruta_documento' => ['nullable', 'string', 'max:2048'],
         ];
     }
 }

@@ -25,9 +25,4 @@ final class StoreTareaRequest extends FormRequest
             'puntaje_maximo' => ['required', 'numeric', 'gt:0'],
         ];
     }
-
-    protected function prepareForValidation(): void
-    {
-        $this->merge(['creado_por_usuario_id' => $this->user()?->id]);
-    }
 }

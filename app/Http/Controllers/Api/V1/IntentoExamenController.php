@@ -21,8 +21,8 @@ final class IntentoExamenController extends Controller
 
         return new IntentoExamenResource($this->service->iniciar(
             (int) $validated['examen_final_id'],
-            (int) $validated['matricula_id'],
-            $request->user()->id,
+            $request->user(),
+            isset($validated['matricula_id']) ? (int) $validated['matricula_id'] : null,
         ));
     }
 

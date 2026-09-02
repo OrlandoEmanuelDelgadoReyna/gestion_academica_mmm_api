@@ -12,6 +12,12 @@ interface NotificacionRepositoryInterface
 {
     public function paginate(int $perPage, ?int $iglesiaId = null): LengthAwarePaginator;
 
+    public function paginateInbox(int $usuarioId, int $perPage): LengthAwarePaginator;
+
+    public function unreadCount(int $usuarioId): int;
+
+    public function markAllAsRead(int $usuarioId): int;
+
     public function create(array $data): Notificacion;
 
     public function update(Notificacion $notificacion, array $data): Notificacion;

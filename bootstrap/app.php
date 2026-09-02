@@ -4,6 +4,7 @@ use App\Exceptions\AsistenciaQrException;
 use App\Exceptions\MatriculaHorarioConflictException;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Responses\ApiResponse;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -23,6 +24,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias(['usuario.activo' => EnsureUserIsActive::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(function (AuthorizationException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                $message = $exception->getMessage();
+                if ($message === '' || $message === 'This action is unauthorized.') {
+                    $message = 'No tiene permiso para realizar esta acción.';
+                }
+
+                return ApiResponse::error('FORBIDDEN', $message, 403);
+            }
+        });
         $exceptions->render(function (AuthenticationException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return ApiResponse::error('UNAUTHENTICATED', 'Autenticación requerida.', 401);

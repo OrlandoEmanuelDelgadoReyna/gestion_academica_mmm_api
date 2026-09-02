@@ -18,11 +18,27 @@ final class NotificacionService
         private NotificacionRepositoryInterface $notificaciones,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private AcademicAccess $academicAccess,
     ) {}
 
     public function paginate(int $perPage, ?int $iglesiaId = null): LengthAwarePaginator
     {
         return $this->notificaciones->paginate($perPage, $iglesiaId);
+    }
+
+    public function paginateInbox(int $usuarioId, int $perPage): LengthAwarePaginator
+    {
+        return $this->notificaciones->paginateInbox($usuarioId, $perPage);
+    }
+
+    public function unreadCount(int $usuarioId): int
+    {
+        return $this->notificaciones->unreadCount($usuarioId);
+    }
+
+    public function marcarTodasLeidas(int $usuarioId): int
+    {
+        return $this->notificaciones->markAllAsRead($usuarioId);
     }
 
     public function create(array $data, int $actorId): Notificacion
@@ -66,9 +82,14 @@ final class NotificacionService
             ]);
         }
 
+        $usuarioIds = $this->academicAccess->constrainUsuarioIdsToIglesia(
+            (int) $notificacion->iglesia_id,
+            $usuarioIds,
+        );
+
         if ($usuarioIds === []) {
             throw ValidationException::withMessages([
-                'usuario_ids' => 'Debe indicar al menos un destinatario.',
+                'usuario_ids' => 'Debe indicar al menos un destinatario de la misma iglesia.',
             ]);
         }
 
@@ -93,5 +114,37 @@ final class NotificacionService
         }
 
         return $destinatario;
+    }
+
+    /** @param  list<int>  $usuarioIds */
+    public function dispatch(array $data, array $usuarioIds, int $actorId): Notificacion
+    {
+        $data['creado_por_usuario_id'] = $actorId;
+        $usuarioIds = $this->academicAccess->constrainUsuarioIdsToIglesia(
+            (int) $data['iglesia_id'],
+            $usuarioIds,
+        );
+
+        if ($usuarioIds === []) {
+            throw ValidationException::withMessages([
+                'usuario_ids' => 'Debe indicar al menos un destinatario de la misma iglesia.',
+            ]);
+        }
+
+        return $this->transactions->execute(function () use ($data, $usuarioIds, $actorId): Notificacion {
+            $notificacion = $this->notificaciones->create($data);
+            $updated = $this->notificaciones->update($notificacion, ['enviado_at' => now()]);
+            $this->notificaciones->createDestinatarios($updated, $usuarioIds);
+            $this->auditorias->record(
+                $actorId,
+                'SEND',
+                'notificaciones',
+                $updated->id,
+                null,
+                $updated->fresh()->getAttributes(),
+            );
+
+            return $updated->load('destinatarios.usuario');
+        });
     }
 }

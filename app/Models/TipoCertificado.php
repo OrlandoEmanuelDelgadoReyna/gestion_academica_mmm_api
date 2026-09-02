@@ -15,6 +15,10 @@ class TipoCertificado extends Model
 
     protected $table = 'tipos_certificado';
 
+    public const CODIGO_ACADEMICO = 'ACADEMICO';
+
+    public const CODIGO_RECOMENDACION = 'RECOMENDACION';
+
     protected $fillable = ['codigo', 'nombre', 'categoria', 'activo'];
 
     protected function casts(): array

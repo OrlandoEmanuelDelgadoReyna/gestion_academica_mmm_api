@@ -16,11 +16,11 @@ class PreguntaExamen extends Model
 
     protected $table = 'preguntas_examen';
 
-    protected $fillable = ['examen_final_id', 'orden', 'tipo', 'enunciado', 'puntaje'];
+    protected $fillable = ['examen_final_id', 'orden', 'tipo', 'enunciado', 'puntaje', 'activo'];
 
     protected function casts(): array
     {
-        return ['puntaje' => 'decimal:2', 'orden' => 'integer'];
+        return ['puntaje' => 'decimal:2', 'orden' => 'integer', 'activo' => 'boolean'];
     }
 
     public function examenFinal(): BelongsTo

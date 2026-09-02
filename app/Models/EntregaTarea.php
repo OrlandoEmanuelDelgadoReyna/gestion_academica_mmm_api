@@ -15,11 +15,39 @@ class EntregaTarea extends Model
 
     protected $table = 'entregas_tarea';
 
-    protected $fillable = ['tarea_id', 'matricula_id', 'contenido', 'ruta_archivo', 'entregado_at', 'nota', 'retroalimentacion', 'calificado_at', 'calificado_por_usuario_id'];
+    protected $fillable = [
+        'tarea_id',
+        'matricula_id',
+        'contenido',
+        'ruta_archivo',
+        'nombre_original',
+        'mime',
+        'tamano_bytes',
+        'entregado_at',
+        'nota',
+        'retroalimentacion',
+        'calificado_at',
+        'calificado_por_usuario_id',
+    ];
 
     protected function casts(): array
     {
-        return ['entregado_at' => 'datetime', 'nota' => 'decimal:2', 'calificado_at' => 'datetime'];
+        return [
+            'entregado_at' => 'datetime',
+            'nota' => 'decimal:2',
+            'calificado_at' => 'datetime',
+            'tamano_bytes' => 'integer',
+        ];
+    }
+
+    public function isCalificada(): bool
+    {
+        return $this->nota !== null || $this->calificado_at !== null;
+    }
+
+    public function hasArchivo(): bool
+    {
+        return filled($this->ruta_archivo);
     }
 
     public function tarea(): BelongsTo

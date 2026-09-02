@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Anuncio;
+use App\Services\AcademicAccess;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 final class StoreAnuncioRequest extends FormRequest
 {
@@ -20,9 +23,24 @@ final class StoreAnuncioRequest extends FormRequest
             'iglesia_id' => ['required', 'integer', 'exists:iglesias,id'],
             'titulo' => ['required', 'string', 'max:150'],
             'contenido' => ['required', 'string'],
-            'estado' => ['required', 'string', 'max:30'],
+            'estado' => ['required', 'string', Rule::in(Anuncio::ESTADOS)],
             'publicado_at' => ['nullable', 'date'],
             'vence_at' => ['nullable', 'date', 'after_or_equal:publicado_at'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $user = $this->user();
+            if ($user === null) {
+                return;
+            }
+
+            $iglesiaId = app(AcademicAccess::class)->iglesiaId($user);
+            if ($iglesiaId !== null && $this->integer('iglesia_id') !== $iglesiaId) {
+                $validator->errors()->add('iglesia_id', 'El anuncio debe pertenecer a su iglesia.');
+            }
+        });
     }
 }

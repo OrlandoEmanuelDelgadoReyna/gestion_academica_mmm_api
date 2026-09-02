@@ -47,4 +47,16 @@ final class Usuario extends Authenticatable
     {
         $query->where('activo', true);
     }
+
+    public function routeNotificationForMail(): ?string
+    {
+        $this->loadMissing('miembro');
+
+        $email = $this->miembro?->correo_electronico;
+        if ($email === null || trim($email) === '') {
+            return null;
+        }
+
+        return $email;
+    }
 }

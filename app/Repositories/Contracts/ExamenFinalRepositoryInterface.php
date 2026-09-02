@@ -9,7 +9,12 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface ExamenFinalRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator;
+    public function paginate(
+        int $perPage,
+        ?int $programacionAcademicaId = null,
+        ?int $assignedMiembroId = null,
+        ?int $enrolledMiembroId = null,
+    ): LengthAwarePaginator;
 
     public function create(array $data): ExamenFinal;
 

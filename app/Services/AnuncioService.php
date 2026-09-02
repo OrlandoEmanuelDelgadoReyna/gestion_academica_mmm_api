@@ -17,36 +17,66 @@ final class AnuncioService
         private AnuncioRepositoryInterface $anuncios,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private NotificacionService $notificaciones,
+        private AcademicAccess $academicAccess,
     ) {}
 
-    public function paginate(int $perPage, ?int $iglesiaId = null): LengthAwarePaginator
+    public function paginate(int $perPage, int $iglesiaId): LengthAwarePaginator
     {
         return $this->anuncios->paginate($perPage, $iglesiaId);
+    }
+
+    public function paginatePublicados(int $perPage, int $iglesiaId): LengthAwarePaginator
+    {
+        return $this->anuncios->paginatePublicados($perPage, $iglesiaId);
     }
 
     public function create(array $data, int $actorId): Anuncio
     {
         $data['creado_por_usuario_id'] = $actorId;
+        $data = $this->normalizePublication($data);
         $this->assertPublicationWindow($data);
 
         return $this->transactions->execute(function () use ($data, $actorId): Anuncio {
             $anuncio = $this->anuncios->create($data);
             $this->auditorias->record($actorId, 'CREATE', 'anuncios', $anuncio->id, null, $anuncio->getAttributes());
 
-            return $anuncio;
+            if ($anuncio->isPublicado()) {
+                $this->auditorias->record($actorId, 'PUBLISH', 'anuncios', $anuncio->id, null, $anuncio->getAttributes());
+                $this->dispatchPublication($anuncio, $actorId);
+            }
+
+            return $anuncio->load(['iglesia', 'creadoPor']);
         });
     }
 
     public function update(Anuncio $anuncio, array $data, int $actorId): Anuncio
     {
-        $this->assertPublicationWindow(array_merge($anuncio->only(['publicado_at', 'vence_at']), $data));
-
         return $this->transactions->execute(function () use ($anuncio, $data, $actorId): Anuncio {
-            $before = $anuncio->getAttributes();
-            $updated = $this->anuncios->update($anuncio, $data);
+            $locked = Anuncio::query()->lockForUpdate()->findOrFail($anuncio->id);
+            $wasPublished = $locked->isPublicado();
+            $merged = $this->normalizePublication(array_merge($locked->only([
+                'titulo',
+                'contenido',
+                'estado',
+                'publicado_at',
+                'vence_at',
+            ]), $data));
+            $this->assertPublicationWindow($merged);
+
+            $before = $locked->getAttributes();
+            $updated = $this->anuncios->update(
+                $locked,
+                array_merge($data, $this->publicationTimestamps($merged, $wasPublished)),
+            );
             $this->auditorias->record($actorId, 'UPDATE', 'anuncios', $updated->id, $before, $updated->getAttributes());
 
-            return $updated;
+            if (! $wasPublished && $updated->isPublicado()) {
+                $this->auditorias->record($actorId, 'PUBLISH', 'anuncios', $updated->id, $before, $updated->getAttributes());
+                $this->dispatchPublication($updated, $actorId);
+            }
+
+            return $updated->load(['iglesia', 'creadoPor']);
         });
     }
 
@@ -57,6 +87,48 @@ final class AnuncioService
             $this->anuncios->delete($anuncio);
             $this->auditorias->record($actorId, 'DELETE', 'anuncios', $anuncio->id, $before, null);
         });
+    }
+
+    private function dispatchPublication(Anuncio $anuncio, int $actorId): void
+    {
+        $usuarioIds = $this->academicAccess->activeUsuarioIdsOfIglesia((int) $anuncio->iglesia_id);
+        if ($usuarioIds === []) {
+            return;
+        }
+
+        $this->notificaciones->dispatch([
+            'iglesia_id' => $anuncio->iglesia_id,
+            'titulo' => mb_substr((string) $anuncio->titulo, 0, 150),
+            'contenido' => (string) $anuncio->contenido,
+            'tipo' => 'anuncio',
+        ], $usuarioIds, $actorId);
+    }
+
+    /** @param  array<string, mixed>  $data */
+    private function normalizePublication(array $data): array
+    {
+        if (($data['estado'] ?? null) === Anuncio::PUBLICADO && empty($data['publicado_at'])) {
+            $data['publicado_at'] = now();
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $merged
+     * @return array<string, mixed>
+     */
+    private function publicationTimestamps(array $merged, bool $wasPublished): array
+    {
+        if ($wasPublished || ($merged['estado'] ?? null) !== Anuncio::PUBLICADO) {
+            return [];
+        }
+
+        if (! empty($merged['publicado_at'])) {
+            return ['publicado_at' => $merged['publicado_at']];
+        }
+
+        return ['publicado_at' => now()];
     }
 
     /** @param  array<string, mixed>  $data */

@@ -9,6 +9,8 @@ use App\Models\IntentoExamen;
 use App\Models\Matricula;
 use App\Models\PreguntaExamen;
 use App\Models\RespuestaExamen;
+use App\Models\SolicitudRecuperacionExamen;
+use App\Models\Usuario;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
 use App\Repositories\Contracts\IntentoExamenRepositoryInterface;
@@ -21,22 +23,15 @@ final class IntentoExamenService
         private IntentoExamenRepositoryInterface $intentos,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private NotaExamenFinalService $notas,
     ) {}
 
-    public function iniciar(int $examenFinalId, int $matriculaId, int $actor): IntentoExamen
+    public function iniciar(int $examenFinalId, Usuario $actor, ?int $requestedMatriculaId = null): IntentoExamen
     {
-        return $this->transactions->execute(function () use ($examenFinalId, $matriculaId, $actor): IntentoExamen {
-            $matricula = Matricula::query()->with('programacionAcademica')->findOrFail($matriculaId);
-
-            if ($matricula->estado !== 'activa') {
-                throw ValidationException::withMessages(['matricula_id' => 'La matrícula debe estar activa.']);
-            }
-
+        return $this->transactions->execute(function () use ($examenFinalId, $actor, $requestedMatriculaId): IntentoExamen {
             $examen = ExamenFinal::query()->findOrFail($examenFinalId);
-
-            if ($examen->programacion_academica_id !== $matricula->programacion_academica_id) {
-                throw ValidationException::withMessages(['examen_final_id' => 'El examen no pertenece a la programación de la matrícula.']);
-            }
+            $matricula = $this->resolveOwnedActiveMatricula($actor, $examen, $requestedMatriculaId);
+            $matricula->load('programacionAcademica');
 
             if (! $examen->activo) {
                 throw ValidationException::withMessages(['examen_final_id' => 'El examen final no está activo.']);
@@ -52,23 +47,34 @@ final class IntentoExamenService
                 throw ValidationException::withMessages(['examen_final_id' => 'El examen ya finalizó.']);
             }
 
-            $maxIntentos = $matricula->programacionAcademica->maximo_intentos_examen;
-            $intentosUsados = $this->intentos->countForMatricula($examenFinalId, $matriculaId);
+            $abierto = IntentoExamen::query()
+                ->where('examen_final_id', $examen->id)
+                ->where('matricula_id', $matricula->id)
+                ->where('estado', 'en_progreso')
+                ->first();
 
-            if ($intentosUsados >= $maxIntentos) {
+            if ($abierto !== null) {
+                throw ValidationException::withMessages(['intento' => 'Ya tienes un intento en progreso.']);
+            }
+
+            $maxIntentos = $matricula->programacionAcademica->maximo_intentos_examen;
+            $intentosUsados = $this->intentos->countForMatricula($examen->id, $matricula->id);
+            $recuperacionAprobada = $this->notas->solicitudActiva($examen, $matricula)?->estado === SolicitudRecuperacionExamen::APROBADA;
+
+            if ($intentosUsados >= $maxIntentos && ! $recuperacionAprobada) {
                 throw ValidationException::withMessages(['matricula_id' => 'Se alcanzó el máximo de intentos permitidos.']);
             }
 
             $intento = $this->intentos->create([
-                'examen_final_id' => $examenFinalId,
-                'matricula_id' => $matriculaId,
+                'examen_final_id' => $examen->id,
+                'matricula_id' => $matricula->id,
                 'inicio_at' => $now,
                 'estado' => 'en_progreso',
             ]);
 
-            $this->auditorias->record($actor, 'CREATE', 'intentos_examen', $intento->id, null, $intento->getAttributes());
+            $this->auditorias->record($actor->id, 'CREATE', 'intentos_examen', $intento->id, null, $intento->getAttributes());
 
-            return $intento;
+            return $intento->load('examenFinal');
         });
     }
 
@@ -81,12 +87,24 @@ final class IntentoExamenService
             }
 
             $examen = $intento->examenFinal()->with('preguntas.opciones')->firstOrFail();
+            $now = now();
+            if (! $examen->activo) {
+                throw ValidationException::withMessages(['examen_final_id' => 'El examen final no está activo.']);
+            }
+            if ($examen->inicio_at !== null && $now->lt($examen->inicio_at)) {
+                throw ValidationException::withMessages(['examen_final_id' => 'El examen aún no está disponible.']);
+            }
+            if ($examen->fin_at !== null && $now->gt($examen->fin_at)) {
+                throw ValidationException::withMessages(['examen_final_id' => 'El examen ya finalizó.']);
+            }
+
             $puntajeTotal = 0.0;
 
             foreach ($respuestas as $respuestaData) {
+                unset($respuestaData['es_correcta'], $respuestaData['puntaje_obtenido'], $respuestaData['aprobado']);
                 $pregunta = $examen->preguntas->firstWhere('id', $respuestaData['pregunta_examen_id']);
 
-                if ($pregunta === null) {
+                if ($pregunta === null || $pregunta->activo === false) {
                     throw ValidationException::withMessages(['respuestas' => 'Pregunta no válida para este examen.']);
                 }
 
@@ -113,8 +131,39 @@ final class IntentoExamenService
 
             $this->auditorias->record($actor, 'UPDATE', 'intentos_examen', $updated->id, $before, $updated->getAttributes());
 
-            return $updated->load('respuestas');
+            $matricula = $intento->matricula()->firstOrFail();
+            $solicitud = $this->notas->solicitudActiva($examen, $matricula);
+            $esRecuperacion = $solicitud?->estado === SolicitudRecuperacionExamen::APROBADA;
+            $this->notas->upsertDesdeIntento($examen, $matricula, (float) $updated->puntaje_obtenido, $actor, $esRecuperacion);
+            if ($esRecuperacion && $solicitud !== null) {
+                $solicitud->update(['estado' => SolicitudRecuperacionExamen::REALIZADA]);
+            }
+
+            return $updated->load(['respuestas', 'examenFinal']);
         });
+    }
+
+    private function resolveOwnedActiveMatricula(Usuario $actor, ExamenFinal $examen, ?int $requestedMatriculaId): Matricula
+    {
+        if ($actor->miembro_id === null) {
+            abort(403);
+        }
+
+        $matricula = Matricula::query()
+            ->where('miembro_id', $actor->miembro_id)
+            ->where('programacion_academica_id', $examen->programacion_academica_id)
+            ->where('estado', 'activa')
+            ->first();
+
+        if ($matricula === null) {
+            abort(403);
+        }
+
+        if ($requestedMatriculaId !== null && $requestedMatriculaId !== (int) $matricula->id) {
+            abort(403);
+        }
+
+        return $matricula;
     }
 
     /** @param array<string, mixed> $respuestaData */

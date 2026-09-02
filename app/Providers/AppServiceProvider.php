@@ -58,6 +58,7 @@ use App\Repositories\Eloquent\EloquentRolRepository;
 use App\Repositories\Eloquent\EloquentSesionRepository;
 use App\Repositories\Eloquent\EloquentTareaRepository;
 use App\Repositories\Eloquent\EloquentUsuarioRepository;
+use App\Http\Responses\ApiResponse;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -110,5 +111,36 @@ class AppServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($username.$request->ip());
         });
+
+        RateLimiter::for('password-recovery', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('correo_electronico')));
+            $tooMany = $this->passwordRecoveryTooManyAttemptsResponse();
+
+            return [
+                Limit::perHour(5)->by('pw-recovery-ip:'.$request->ip())->response($tooMany),
+                Limit::perHour(5)->by('pw-recovery-email:'.$email)->response($tooMany),
+            ];
+        });
+
+        RateLimiter::for('password-recovery-verify', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('correo_electronico')));
+            $tooMany = $this->passwordRecoveryTooManyAttemptsResponse();
+
+            return [
+                Limit::perMinute(15)->by('pw-verify-ip:'.$request->ip())->response($tooMany),
+                Limit::perMinute(15)->by('pw-verify-email:'.$email)->response($tooMany),
+            ];
+        });
+    }
+
+    private function passwordRecoveryTooManyAttemptsResponse(): \Closure
+    {
+        return function (Request $request, array $headers) {
+            return ApiResponse::error(
+                'HTTP_ERROR',
+                'Has realizado demasiadas solicitudes. Inténtalo nuevamente más tarde.',
+                429,
+            )->withHeaders($headers);
+        };
     }
 }

@@ -17,18 +17,30 @@ final class TareaService
         private TareaRepositoryInterface $tareas,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private TareaNotificacionDispatcher $notificaciones,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
-    {
-        return $this->tareas->paginate($perPage);
+    public function paginate(
+        int $perPage,
+        ?int $programacionAcademicaId = null,
+        ?int $assignedMiembroId = null,
+        ?int $enrolledMiembroId = null,
+    ): LengthAwarePaginator {
+        return $this->tareas->paginate(
+            $perPage,
+            $programacionAcademicaId,
+            $assignedMiembroId,
+            $enrolledMiembroId,
+        );
     }
 
     public function create(array $data, int $actor): Tarea
     {
         return $this->transactions->execute(function () use ($data, $actor): Tarea {
+            $data['creado_por_usuario_id'] = $actor;
             $tarea = $this->tareas->create($data);
             $this->auditorias->record($actor, 'CREATE', 'tareas', $tarea->id, null, $tarea->getAttributes());
+            $this->notificaciones->tareaPublicada($tarea, $actor);
 
             return $tarea;
         });

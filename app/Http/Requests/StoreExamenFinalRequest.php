@@ -29,7 +29,7 @@ final class StoreExamenFinalRequest extends FormRequest
             'inicio_at' => ['nullable', 'date'],
             'fin_at' => ['nullable', 'date', 'after:inicio_at'],
             'puntaje_maximo' => ['required', 'numeric', 'gt:0'],
-            'nota_minima_aprobatoria' => ['required', 'numeric', 'min:0'],
+            'nota_minima_aprobatoria' => ['required', 'numeric', 'min:0', 'lte:puntaje_maximo'],
             'activo' => ['sometimes', 'boolean'],
         ];
     }

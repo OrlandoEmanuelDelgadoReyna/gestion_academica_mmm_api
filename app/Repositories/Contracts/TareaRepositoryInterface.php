@@ -9,7 +9,12 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface TareaRepositoryInterface
 {
-    public function paginate(int $perPage): LengthAwarePaginator;
+    public function paginate(
+        int $perPage,
+        ?int $programacionAcademicaId = null,
+        ?int $assignedMiembroId = null,
+        ?int $enrolledMiembroId = null,
+    ): LengthAwarePaginator;
 
     public function create(array $data): Tarea;
 

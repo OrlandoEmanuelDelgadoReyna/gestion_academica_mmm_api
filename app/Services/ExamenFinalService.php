@@ -20,9 +20,13 @@ final class ExamenFinalService
         private AuditoriaRepositoryInterface $auditorias,
     ) {}
 
-    public function paginate(int $perPage): LengthAwarePaginator
-    {
-        return $this->examenes->paginate($perPage);
+    public function paginate(
+        int $perPage,
+        ?int $programacionAcademicaId = null,
+        ?int $assignedMiembroId = null,
+        ?int $enrolledMiembroId = null,
+    ): LengthAwarePaginator {
+        return $this->examenes->paginate($perPage, $programacionAcademicaId, $assignedMiembroId, $enrolledMiembroId);
     }
 
     public function create(array $data, int $actor): ExamenFinal
@@ -32,21 +36,27 @@ final class ExamenFinalService
                 throw ValidationException::withMessages(['programacion_academica_id' => 'Ya existe un examen final para esta programación.']);
             }
 
+            $this->assertNotaMinima($data['nota_minima_aprobatoria'] ?? null, $data['puntaje_maximo'] ?? null);
+            $data['creado_por_usuario_id'] = $actor;
             $examen = $this->examenes->create($data);
             $this->auditorias->record($actor, 'CREATE', 'examenes_finales', $examen->id, null, $examen->getAttributes());
 
-            return $examen;
+            return $examen->load(['programacionAcademica', 'creadoPor.miembro']);
         });
     }
 
     public function update(ExamenFinal $examen, array $data, int $actor): ExamenFinal
     {
         return $this->transactions->execute(function () use ($examen, $data, $actor): ExamenFinal {
+            unset($data['programacion_academica_id'], $data['creado_por_usuario_id']);
+            $max = array_key_exists('puntaje_maximo', $data) ? $data['puntaje_maximo'] : $examen->puntaje_maximo;
+            $min = array_key_exists('nota_minima_aprobatoria', $data) ? $data['nota_minima_aprobatoria'] : $examen->nota_minima_aprobatoria;
+            $this->assertNotaMinima($min, $max);
             $before = $examen->getAttributes();
             $updated = $this->examenes->update($examen, $data);
             $this->auditorias->record($actor, 'UPDATE', 'examenes_finales', $updated->id, $before, $updated->getAttributes());
 
-            return $updated;
+            return $updated->load(['programacionAcademica', 'creadoPor.miembro']);
         });
     }
 
@@ -57,5 +67,18 @@ final class ExamenFinalService
             $this->examenes->delete($examen);
             $this->auditorias->record($actor, 'DELETE', 'examenes_finales', $examen->id, $before, null);
         });
+    }
+
+    private function assertNotaMinima(mixed $minima, mixed $maximo): void
+    {
+        if ($minima === null || $maximo === null) {
+            return;
+        }
+
+        if ((float) $minima > (float) $maximo) {
+            throw ValidationException::withMessages([
+                'nota_minima_aprobatoria' => 'La nota mínima no puede superar el puntaje máximo.',
+            ]);
+        }
     }
 }

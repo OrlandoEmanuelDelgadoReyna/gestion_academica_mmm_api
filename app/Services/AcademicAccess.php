@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Asistencia;
+use App\Models\Certificado;
 use App\Models\Matricula;
+use App\Models\Miembro;
 use App\Models\ProgramacionAcademica;
 use App\Models\Sesion;
 use App\Models\Usuario;
@@ -27,6 +29,58 @@ final class AcademicAccess
     public function isDocente(Usuario $user): bool
     {
         return $user->roles()->where('codigo', 'DOCENTE')->exists();
+    }
+
+    public function iglesiaId(Usuario $user): ?int
+    {
+        if ($user->relationLoaded('miembro')) {
+            return $user->miembro?->iglesia_id !== null ? (int) $user->miembro->iglesia_id : null;
+        }
+
+        if ($user->miembro_id === null) {
+            return null;
+        }
+
+        $iglesiaId = Miembro::query()->whereKey($user->miembro_id)->value('iglesia_id');
+
+        return $iglesiaId !== null ? (int) $iglesiaId : null;
+    }
+
+    public function belongsToIglesia(Usuario $user, int $iglesiaId): bool
+    {
+        $own = $this->iglesiaId($user);
+
+        return $own !== null && $own === $iglesiaId;
+    }
+
+    /** @return list<int> */
+    public function activeUsuarioIdsOfIglesia(int $iglesiaId): array
+    {
+        return Usuario::query()
+            ->where('activo', true)
+            ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $usuarioIds
+     * @return list<int>
+     */
+    public function constrainUsuarioIdsToIglesia(int $iglesiaId, array $usuarioIds): array
+    {
+        $usuarioIds = array_values(array_unique(array_filter($usuarioIds)));
+        if ($usuarioIds === []) {
+            return [];
+        }
+
+        return Usuario::query()
+            ->whereIn('id', $usuarioIds)
+            ->where('activo', true)
+            ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->pluck('id')
+            ->all();
     }
 
     public function canViewAssignedLists(Usuario $user): bool
@@ -224,12 +278,12 @@ final class AcademicAccess
         });
     }
 
-    private function isAssignedToProgramacion(Usuario $user, ProgramacionAcademica $programacion): bool
+    public function isAssignedToProgramacion(Usuario $user, ProgramacionAcademica $programacion): bool
     {
         return $this->isAssignedToProgramacionId($user, $programacion->id);
     }
 
-    private function isAssignedToProgramacionId(Usuario $user, int $programacionId): bool
+    public function isAssignedToProgramacionId(Usuario $user, int $programacionId): bool
     {
         $miembroId = $user->miembro_id;
         if ($miembroId === null) {
@@ -261,5 +315,114 @@ final class AcademicAccess
                 ->where('miembro_id', $miembroId)
                 ->where('estado', 'activa');
         };
+    }
+
+    public function canViewCertificateLists(Usuario $user): bool
+    {
+        return $this->isGlobalAcademic($user)
+            || ($this->isDocente($user) && $user->miembro_id !== null)
+            || $user->miembro_id !== null;
+    }
+
+    public function constrainCertificados(Builder $query, Usuario $user): void
+    {
+        if ($this->isGlobalAcademic($user)) {
+            $iglesiaId = $this->iglesiaId($user);
+            if ($iglesiaId === null) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            $query->whereHas('miembro', fn ($sub) => $sub->where('iglesia_id', $iglesiaId));
+
+            return;
+        }
+
+        if ($this->isDocente($user) && $user->miembro_id !== null) {
+            $this->constrainByAssignedProgramacion($query, (int) $user->miembro_id);
+
+            return;
+        }
+
+        if ($user->miembro_id !== null) {
+            $query->where('miembro_id', $user->miembro_id);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
+    }
+
+    public function canViewCertificate(Usuario $user, Certificado $certificado): bool
+    {
+        if ($user->miembro_id !== null && (int) $certificado->miembro_id === (int) $user->miembro_id) {
+            if ($certificado->programacion_academica_id === null) {
+                return true;
+            }
+
+            return $this->hasAnyEnrollment($user, (int) $certificado->programacion_academica_id);
+        }
+
+        if ($this->isGlobalAcademic($user)) {
+            $iglesiaId = $this->iglesiaId($user);
+            if ($iglesiaId === null) {
+                return false;
+            }
+
+            $memberChurch = $certificado->relationLoaded('miembro')
+                ? $certificado->miembro?->iglesia_id
+                : Miembro::query()->whereKey($certificado->miembro_id)->value('iglesia_id');
+
+            return $memberChurch !== null && (int) $memberChurch === $iglesiaId;
+        }
+
+        if ($this->isDocente($user) && $certificado->programacion_academica_id !== null) {
+            return $this->isAssignedToProgramacionId($user, (int) $certificado->programacion_academica_id);
+        }
+
+        return false;
+    }
+
+    public function canIssueCertificatesForMember(Usuario $user, int $miembroId): bool
+    {
+        if (! $this->isGlobalAcademic($user)) {
+            return false;
+        }
+
+        $iglesiaId = $this->iglesiaId($user);
+        if ($iglesiaId === null) {
+            return false;
+        }
+
+        $memberChurch = Miembro::query()->whereKey($miembroId)->value('iglesia_id');
+
+        return $memberChurch !== null && (int) $memberChurch === $iglesiaId;
+    }
+
+    public function canConsultarElegibilidad(Usuario $user, int $miembroId, int $programacionId): bool
+    {
+        if ($user->miembro_id !== null && (int) $user->miembro_id === $miembroId) {
+            return $this->hasAnyEnrollment($user, $programacionId);
+        }
+
+        if ($this->isGlobalAcademic($user)) {
+            return $this->canIssueCertificatesForMember($user, $miembroId);
+        }
+
+        return $this->isDocente($user) && $this->isAssignedToProgramacionId($user, $programacionId);
+    }
+
+    public function hasAnyEnrollment(Usuario $user, int $programacionAcademicaId): bool
+    {
+        $miembroId = $user->miembro_id;
+        if ($miembroId === null) {
+            return false;
+        }
+
+        return Matricula::query()
+            ->where('miembro_id', $miembroId)
+            ->where('programacion_academica_id', $programacionAcademicaId)
+            ->exists();
     }
 }

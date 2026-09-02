@@ -9,6 +9,8 @@ use App\Http\Requests\StoreAnuncioRequest;
 use App\Http\Requests\UpdateAnuncioRequest;
 use App\Http\Resources\AnuncioResource;
 use App\Models\Anuncio;
+use App\Models\Usuario;
+use App\Services\AcademicAccess;
 use App\Services\AnuncioService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,15 +18,39 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 final class AnuncioController extends Controller
 {
-    public function __construct(private AnuncioService $service) {}
+    public function __construct(
+        private AnuncioService $service,
+        private AcademicAccess $academicAccess,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorize('viewAny', Anuncio::class);
 
-        $iglesiaId = $request->filled('iglesia_id') ? $request->integer('iglesia_id') : null;
+        /** @var Usuario $user */
+        $user = $request->user();
+        $iglesiaId = $this->requireIglesiaId($user);
 
-        return AnuncioResource::collection($this->service->paginate((int) $request->integer('per_page', 15), $iglesiaId));
+        if ($request->filled('iglesia_id') && $request->integer('iglesia_id') !== $iglesiaId) {
+            abort(403, 'No puede consultar anuncios de otra iglesia.');
+        }
+
+        return AnuncioResource::collection(
+            $this->service->paginate((int) $request->integer('per_page', 15), $iglesiaId),
+        );
+    }
+
+    public function publicados(Request $request): AnonymousResourceCollection
+    {
+        $this->authorize('viewPublicados', Anuncio::class);
+
+        /** @var Usuario $user */
+        $user = $request->user();
+        $iglesiaId = $this->requireIglesiaId($user);
+
+        return AnuncioResource::collection(
+            $this->service->paginatePublicados((int) $request->integer('per_page', 15), $iglesiaId),
+        );
     }
 
     public function store(StoreAnuncioRequest $request): AnuncioResource
@@ -36,7 +62,7 @@ final class AnuncioController extends Controller
     {
         $this->authorize('view', $anuncio);
 
-        return new AnuncioResource($anuncio->load('iglesia'));
+        return new AnuncioResource($anuncio->load(['iglesia', 'creadoPor']));
     }
 
     public function update(UpdateAnuncioRequest $request, Anuncio $anuncio): AnuncioResource
@@ -51,5 +77,15 @@ final class AnuncioController extends Controller
         $this->service->delete($anuncio, $request->user()->id);
 
         return response()->json(status: 204);
+    }
+
+    private function requireIglesiaId(Usuario $user): int
+    {
+        $iglesiaId = $this->academicAccess->iglesiaId($user);
+        if ($iglesiaId === null) {
+            abort(403, 'No tiene una iglesia asignada.');
+        }
+
+        return $iglesiaId;
     }
 }

@@ -19,7 +19,6 @@ final class ReemplazarCertificadoRequest extends FormRequest
             'tipo_certificado_id' => ['sometimes', 'integer', 'exists:tipos_certificado,id'],
             'destinatario' => ['nullable', 'string', 'max:150'],
             'vence_at' => ['nullable', 'date'],
-            'ruta_documento' => ['nullable', 'string', 'max:2048'],
         ];
     }
 }

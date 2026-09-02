@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Models\Calificacion;
 use App\Models\EntregaTarea;
+use App\Models\ExamenFinal;
 use App\Models\IntentoExamen;
 use App\Models\Matricula;
+use App\Models\NotaExamenFinal;
 use App\Models\Tarea;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\CalificacionRepositoryInterface;
@@ -125,6 +127,34 @@ final class CalificacionService
     }
 
     private function calcularNotaExamen(Matricula $matricula, float $escalaMaxima): ?float
+    {
+        $examen = ExamenFinal::query()
+            ->where('programacion_academica_id', $matricula->programacion_academica_id)
+            ->first();
+
+        if ($examen === null) {
+            return $this->notaDesdeMejorIntento($matricula, $escalaMaxima);
+        }
+
+        $registro = NotaExamenFinal::query()
+            ->where('examen_final_id', $examen->id)
+            ->where('matricula_id', $matricula->id)
+            ->first();
+
+        $nota = $registro?->notaConsiderada();
+        if ($nota !== null) {
+            $puntajeMaximo = (float) $examen->puntaje_maximo;
+            if ($puntajeMaximo <= 0) {
+                return null;
+            }
+
+            return round(($nota / $puntajeMaximo) * $escalaMaxima, 2);
+        }
+
+        return $this->notaDesdeMejorIntento($matricula, $escalaMaxima);
+    }
+
+    private function notaDesdeMejorIntento(Matricula $matricula, float $escalaMaxima): ?float
     {
         $intento = IntentoExamen::query()
             ->where('matricula_id', $matricula->id)

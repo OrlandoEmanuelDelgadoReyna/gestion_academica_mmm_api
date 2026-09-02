@@ -5,32 +5,30 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 final class UpdateEntregaTareaRequest extends FormRequest
 {
+    use ValidatesEntregaArchivo;
+
     public function authorize(): bool
     {
-        return $this->user()?->can('update', $this->route('entrega_tarea')) ?? false;
+        $entrega = $this->route('entregaTarea') ?? $this->route('entrega_tarea');
+
+        return $this->user()?->can('update', $entrega) ?? false;
     }
 
     public function rules(): array
     {
         return [
             'contenido' => ['nullable', 'string'],
-            'ruta_archivo' => ['nullable', 'string', 'max:2048'],
-            'nota' => ['nullable', 'numeric', 'min:0'],
-            'retroalimentacion' => ['nullable', 'string'],
-            'calificado_at' => ['nullable', 'date'],
+            'archivo' => $this->archivoRules(),
+            'eliminar_archivo' => ['sometimes', 'boolean'],
         ];
     }
 
-    protected function prepareForValidation(): void
+    public function withValidator(Validator $validator): void
     {
-        if ($this->has('nota')) {
-            $this->merge([
-                'calificado_por_usuario_id' => $this->user()?->id,
-                'calificado_at' => $this->input('calificado_at', now()->toDateTimeString()),
-            ]);
-        }
+        $validator->after(fn (Validator $v) => $this->afterValidatingEntregaArchivo($v));
     }
 }

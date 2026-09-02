@@ -55,6 +55,16 @@ class Matricula extends Model
         return $this->hasOne(Calificacion::class);
     }
 
+    public function notasExamenFinal(): HasMany
+    {
+        return $this->hasMany(NotaExamenFinal::class);
+    }
+
+    public function solicitudesRecuperacionExamen(): HasMany
+    {
+        return $this->hasMany(SolicitudRecuperacionExamen::class);
+    }
+
     public function scopeActiva(Builder $query): Builder
     {
         return $query->where('estado', 'activa');

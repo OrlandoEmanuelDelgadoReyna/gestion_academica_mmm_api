@@ -16,7 +16,7 @@ class ExamenFinal extends Model
 
     protected $table = 'examenes_finales';
 
-    protected $fillable = ['programacion_academica_id', 'titulo', 'descripcion', 'inicio_at', 'fin_at', 'puntaje_maximo', 'nota_minima_aprobatoria', 'activo'];
+    protected $fillable = ['programacion_academica_id', 'titulo', 'descripcion', 'inicio_at', 'fin_at', 'puntaje_maximo', 'nota_minima_aprobatoria', 'activo', 'creado_por_usuario_id'];
 
     protected function casts(): array
     {
@@ -36,5 +36,20 @@ class ExamenFinal extends Model
     public function intentos(): HasMany
     {
         return $this->hasMany(IntentoExamen::class);
+    }
+
+    public function creadoPor(): BelongsTo
+    {
+        return $this->belongsTo(Usuario::class, 'creado_por_usuario_id');
+    }
+
+    public function notas(): HasMany
+    {
+        return $this->hasMany(NotaExamenFinal::class);
+    }
+
+    public function solicitudesRecuperacion(): HasMany
+    {
+        return $this->hasMany(SolicitudRecuperacionExamen::class);
     }
 }

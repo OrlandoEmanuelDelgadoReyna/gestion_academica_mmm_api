@@ -20,6 +20,39 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
             ->paginate($perPage);
     }
 
+    public function paginateInbox(int $usuarioId, int $perPage): LengthAwarePaginator
+    {
+        return NotificacionDestinatario::query()
+            ->select('notificacion_destinatarios.*')
+            ->join('notificaciones', 'notificaciones.id', '=', 'notificacion_destinatarios.notificacion_id')
+            ->with('notificacion')
+            ->where('notificacion_destinatarios.usuario_id', $usuarioId)
+            ->orderByRaw('CASE WHEN notificacion_destinatarios.leido_at IS NULL THEN 0 ELSE 1 END')
+            ->orderByDesc('notificaciones.enviado_at')
+            ->orderByDesc('notificacion_destinatarios.id')
+            ->paginate($perPage);
+    }
+
+    public function unreadCount(int $usuarioId): int
+    {
+        return NotificacionDestinatario::query()
+            ->where('usuario_id', $usuarioId)
+            ->whereNull('leido_at')
+            ->count();
+    }
+
+    public function markAllAsRead(int $usuarioId): int
+    {
+        return NotificacionDestinatario::query()
+            ->where('usuario_id', $usuarioId)
+            ->whereNull('leido_at')
+            ->update([
+                'estado' => 'leido',
+                'leido_at' => now(),
+                'updated_at' => now(),
+            ]);
+    }
+
     public function create(array $data): Notificacion
     {
         return Notificacion::query()->create($data);

@@ -18,7 +18,7 @@ final class IniciarIntentoExamenRequest extends FormRequest
     {
         return [
             'examen_final_id' => ['required', 'integer', 'exists:examenes_finales,id'],
-            'matricula_id' => ['required', 'integer', 'exists:matriculas,id'],
+            'matricula_id' => ['sometimes', 'integer', 'exists:matriculas,id'],
         ];
     }
 }
