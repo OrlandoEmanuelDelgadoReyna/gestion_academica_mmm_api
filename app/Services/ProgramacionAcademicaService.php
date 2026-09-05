@@ -56,13 +56,19 @@ final class ProgramacionAcademicaService
 
     public function transitionEstado(ProgramacionAcademica $programacion, string $estado, int $actor): ProgramacionAcademica
     {
-        return $this->transactions->execute(function () use ($programacion, $estado, $actor): ProgramacionAcademica {
+        $updated = $this->transactions->execute(function () use ($programacion, $estado, $actor): ProgramacionAcademica {
             $before = $programacion->getAttributes();
             $updated = $this->programaciones->updateEstado($programacion, $estado);
             $this->auditorias->record($actor, 'STATE_TRANSITION', 'programaciones_academicas', $updated->id, $before, $updated->getAttributes());
 
             return $updated;
         });
+
+        if ($updated->estado === 'cerrada') {
+            app(MatriculaCompletionService::class)->syncProgramacion($updated, $actor);
+        }
+
+        return $updated;
     }
 
     private function validateBusinessRules(array $data): void

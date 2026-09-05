@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\ExamenFinal;
+use App\Models\ProgramacionAcademica;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -12,7 +13,17 @@ final class StoreExamenFinalRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', ExamenFinal::class) ?? false;
+        $programacionId = (int) $this->input('programacion_academica_id');
+        if ($programacionId < 1) {
+            return $this->user()?->can('create', ExamenFinal::class) ?? false;
+        }
+
+        $programacion = ProgramacionAcademica::query()->find($programacionId);
+        if ($programacion === null) {
+            return false;
+        }
+
+        return $this->user()?->can('create', [ExamenFinal::class, $programacion]) ?? false;
     }
 
     public function rules(): array

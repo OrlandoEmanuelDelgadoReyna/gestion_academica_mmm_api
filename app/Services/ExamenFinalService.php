@@ -18,6 +18,7 @@ final class ExamenFinalService
         private ExamenFinalRepositoryInterface $examenes,
         private DatabaseTransactionRepositoryInterface $transactions,
         private AuditoriaRepositoryInterface $auditorias,
+        private ExamenNotificacionDispatcher $notificaciones,
     ) {}
 
     public function paginate(
@@ -31,7 +32,7 @@ final class ExamenFinalService
 
     public function create(array $data, int $actor): ExamenFinal
     {
-        return $this->transactions->execute(function () use ($data, $actor): ExamenFinal {
+        $examen = $this->transactions->execute(function () use ($data, $actor): ExamenFinal {
             if (ExamenFinal::query()->where('programacion_academica_id', $data['programacion_academica_id'])->exists()) {
                 throw ValidationException::withMessages(['programacion_academica_id' => 'Ya existe un examen final para esta programación.']);
             }
@@ -41,14 +42,25 @@ final class ExamenFinalService
             $examen = $this->examenes->create($data);
             $this->auditorias->record($actor, 'CREATE', 'examenes_finales', $examen->id, null, $examen->getAttributes());
 
-            return $examen->load(['programacionAcademica', 'creadoPor.miembro']);
+            return $examen->load(['programacionAcademica.curso', 'creadoPor.miembro']);
         });
+
+        $this->notificaciones->examenProgramado($examen, $actor);
+
+        return $examen;
     }
 
     public function update(ExamenFinal $examen, array $data, int $actor): ExamenFinal
     {
         return $this->transactions->execute(function () use ($examen, $data, $actor): ExamenFinal {
-            unset($data['programacion_academica_id'], $data['creado_por_usuario_id']);
+            unset(
+                $data['programacion_academica_id'],
+                $data['creado_por_usuario_id'],
+                $data['recuperacion_titulo'],
+                $data['recuperacion_descripcion'],
+                $data['recuperacion_at'],
+                $data['recuperacion_generada_at'],
+            );
             $max = array_key_exists('puntaje_maximo', $data) ? $data['puntaje_maximo'] : $examen->puntaje_maximo;
             $min = array_key_exists('nota_minima_aprobatoria', $data) ? $data['nota_minima_aprobatoria'] : $examen->nota_minima_aprobatoria;
             $this->assertNotaMinima($min, $max);
@@ -58,6 +70,33 @@ final class ExamenFinalService
 
             return $updated->load(['programacionAcademica', 'creadoPor.miembro']);
         });
+    }
+
+    public function generarRecuperacion(ExamenFinal $examen, array $data, int $actor): ExamenFinal
+    {
+        $examen = $this->transactions->execute(function () use ($examen, $data, $actor): ExamenFinal {
+            $examen->refresh();
+            if ($examen->tieneRecuperacionGenerada()) {
+                throw ValidationException::withMessages([
+                    'recuperacion' => 'Ya existe un examen de recuperación para este examen.',
+                ]);
+            }
+
+            $before = $examen->getAttributes();
+            $updated = $this->examenes->update($examen, [
+                'recuperacion_titulo' => $data['titulo'],
+                'recuperacion_descripcion' => $data['descripcion'] ?? null,
+                'recuperacion_at' => $data['fecha'],
+                'recuperacion_generada_at' => now(),
+            ]);
+            $this->auditorias->record($actor, 'UPDATE', 'examenes_finales', $updated->id, $before, $updated->getAttributes());
+
+            return $updated->load(['programacionAcademica.curso', 'creadoPor.miembro', 'notas']);
+        });
+
+        $this->notificaciones->recuperacionGenerada($examen, $actor);
+
+        return $examen;
     }
 
     public function delete(ExamenFinal $examen, int $actor): void

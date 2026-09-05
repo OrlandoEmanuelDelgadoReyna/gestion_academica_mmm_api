@@ -100,6 +100,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('preguntas-examen/{preguntaExamen}', [ExamenFinalController::class, 'destroyPregunta']);
         Route::get('examenes-finales/{examenFinal}/notas', [ExamenFinalController::class, 'notas']);
         Route::put('examenes-finales/{examenFinal}/notas/{matricula}', [ExamenFinalController::class, 'registrarNota']);
+        Route::post('examenes-finales/{examenFinal}/generar-recuperacion', [ExamenFinalController::class, 'generarRecuperacion']);
         Route::get('examenes-finales/{examenFinal}/recuperaciones', [ExamenFinalController::class, 'solicitudes']);
         Route::post('examenes-finales/{examenFinal}/recuperacion', [ExamenFinalController::class, 'solicitarRecuperacion']);
         Route::put('solicitudes-recuperacion-examen/{solicitudRecuperacionExamen}', [ExamenFinalController::class, 'atenderSolicitud']);

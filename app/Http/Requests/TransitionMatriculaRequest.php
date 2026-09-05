@@ -17,7 +17,14 @@ final class TransitionMatriculaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'estado' => ['required', 'string', Rule::in(['activa', 'retirada', 'completada'])],
+            'estado' => ['required', 'string', Rule::in(['activa', 'retirada'])],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'estado.in' => 'La matrícula completada se asigna automáticamente. Solo se puede gestionar activa o retirada.',
         ];
     }
 }

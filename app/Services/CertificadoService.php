@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Asistencia;
 use App\Models\Calificacion;
 use App\Models\Certificado;
 use App\Models\Matricula;
-use App\Models\Sesion;
 use App\Models\TipoCertificado;
 use App\Models\Usuario;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
@@ -24,7 +22,7 @@ use Throwable;
 /** Manages certificate issuance, revocation, replacement and verification. */
 final class CertificadoService
 {
-    public const float ASISTENCIA_MINIMA = 80.0;
+    public const float ASISTENCIA_MINIMA = AcademicRequirements::ASISTENCIA_MINIMA;
 
     public function __construct(
         private CertificadoRepositoryInterface $certificados,
@@ -34,6 +32,7 @@ final class CertificadoService
         private CertificadoPdfGenerator $pdfs,
         private CertificadoNotificacionDispatcher $notificaciones,
         private AcademicAccess $academicAccess,
+        private AcademicRequirements $requirements,
     ) {}
 
     public function paginate(Usuario $user, int $perPage, ?int $programacionAcademicaId = null, ?int $miembroId = null): LengthAwarePaginator
@@ -277,7 +276,7 @@ final class CertificadoService
             } elseif ($calculoOk) {
                 $notaFinal = $calificacion->nota_final !== null ? (float) $calificacion->nota_final : null;
                 $calificacionEstado = $calificacion->estado;
-                if ($calificacion->estado === 'aprobada') {
+                if ($this->requirements->notaFinalAprueba($notaFinal)) {
                     $cursoAprobado = true;
                     $motivos[] = 'Curso aprobado.';
                 } else {
@@ -285,7 +284,7 @@ final class CertificadoService
                 }
             }
 
-            $asistencia = $this->asistenciaDe($matricula);
+            $asistencia = $this->requirements->asistenciaDe($matricula);
             if ($asistencia['total_sesiones'] === 0) {
                 $motivos[] = 'No hay sesiones registradas para calcular asistencia.';
             } elseif ($asistencia['cumple']) {
@@ -333,37 +332,6 @@ final class CertificadoService
             'asistencia_cumple' => $asistencia['total_sesiones'] === 0 ? false : $asistencia['cumple'],
             'certificado_vigente_id' => $vigenteId,
             'motivos' => array_values(array_unique($motivos)),
-        ];
-    }
-
-    /** @return array{porcentaje: ?float, cumple: bool, total_sesiones: int, presentes: int} */
-    private function asistenciaDe(Matricula $matricula): array
-    {
-        $totalSesiones = Sesion::query()
-            ->where('programacion_academica_id', $matricula->programacion_academica_id)
-            ->count();
-
-        if ($totalSesiones === 0) {
-            return [
-                'porcentaje' => null,
-                'cumple' => false,
-                'total_sesiones' => 0,
-                'presentes' => 0,
-            ];
-        }
-
-        $presentes = Asistencia::query()
-            ->where('matricula_id', $matricula->id)
-            ->whereIn('estado', ['asistio', 'justificado'])
-            ->count();
-
-        $porcentaje = round(($presentes / $totalSesiones) * 100, 2);
-
-        return [
-            'porcentaje' => $porcentaje,
-            'cumple' => $porcentaje >= self::ASISTENCIA_MINIMA,
-            'total_sesiones' => $totalSesiones,
-            'presentes' => $presentes,
         ];
     }
 

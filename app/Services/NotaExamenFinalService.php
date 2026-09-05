@@ -58,14 +58,22 @@ final class NotaExamenFinalService
 
         $this->assertNota($data['nota'] ?? null, $examen);
 
-        return $this->transactions->execute(function () use ($examen, $matricula, $data, $actor): NotaExamenFinal {
+        $fresh = $this->transactions->execute(function () use ($examen, $matricula, $data, $actor): NotaExamenFinal {
             $registro = NotaExamenFinal::query()->firstOrNew([
                 'examen_final_id' => $examen->id,
                 'matricula_id' => $matricula->id,
             ]);
             $before = $registro->exists ? $registro->getAttributes() : null;
             $solicitud = $this->solicitudActiva($examen, $matricula);
-            $esRecuperacion = $solicitud !== null && $solicitud->estado === SolicitudRecuperacionExamen::APROBADA;
+            $solicitudAprobada = $solicitud !== null && $solicitud->estado === SolicitudRecuperacionExamen::APROBADA;
+            $candidato = $examen->esCandidatoRecuperacion($matricula, $registro->exists ? $registro : null);
+            $esRecuperacion = $solicitudAprobada || ($examen->tieneRecuperacionGenerada() && $candidato);
+
+            if ($examen->tieneRecuperacionGenerada() && ! $esRecuperacion && $registro->nota !== null) {
+                throw ValidationException::withMessages([
+                    'nota' => 'Solo se pueden registrar notas de recuperación para alumnos desaprobados.',
+                ]);
+            }
 
             if ($esRecuperacion) {
                 $registro->nota_recuperacion = $data['nota'];
@@ -76,8 +84,10 @@ final class NotaExamenFinalService
                     $registro->calificado_por_usuario_id = $actor;
                     $registro->calificado_at = now();
                 }
-                $solicitud->estado = SolicitudRecuperacionExamen::REALIZADA;
-                $solicitud->save();
+                if ($solicitud !== null && $solicitudAprobada) {
+                    $solicitud->estado = SolicitudRecuperacionExamen::REALIZADA;
+                    $solicitud->save();
+                }
             } else {
                 $registro->nota = $data['nota'];
                 $registro->calificado_por_usuario_id = $actor;
@@ -97,11 +107,15 @@ final class NotaExamenFinalService
                 $registro->fresh()->getAttributes(),
             );
 
-            $fresh = $registro->fresh(['matricula.miembro', 'calificadoPor.miembro', 'examenFinal']);
-            $this->notificaciones->notaRegistrada($fresh, $actor, $esRecuperacion);
+            $registrada = $registro->fresh(['matricula.miembro', 'calificadoPor.miembro', 'examenFinal']);
+            $this->notificaciones->notaRegistrada($registrada, $actor, $esRecuperacion);
 
-            return $fresh;
+            return $registrada;
         });
+
+        app(MatriculaCompletionService::class)->recalcularYCompletar($matricula, $actor);
+
+        return $fresh;
     }
 
     public function upsertDesdeIntento(
@@ -133,6 +147,8 @@ final class NotaExamenFinalService
 
         $fresh = $registro->fresh(['matricula.miembro', 'calificadoPor.miembro', 'examenFinal']);
         $this->notificaciones->notaRegistrada($fresh, $actor, $esRecuperacion);
+
+        app(MatriculaCompletionService::class)->recalcularYCompletar($matricula, $actor);
 
         return $fresh;
     }

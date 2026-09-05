@@ -37,13 +37,19 @@ final class AsistenciaService
         $this->validateBusinessRules($data);
 
         try {
-            return $this->transactions->execute(function () use ($data, $actor): Asistencia {
+            $asistencia = $this->transactions->execute(function () use ($data, $actor): Asistencia {
                 $data['registrado_por_usuario_id'] = $actor;
                 $asistencia = $this->asistencias->create($data);
                 $this->auditorias->record($actor, 'CREATE', 'asistencias', $asistencia->id, null, $asistencia->getAttributes());
 
                 return $asistencia->load(['sesion', 'matricula.miembro']);
             });
+
+            if ($asistencia->matricula !== null) {
+                app(MatriculaCompletionService::class)->tryComplete($asistencia->matricula, $actor);
+            }
+
+            return $asistencia;
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages([
                 'matricula_id' => 'Ya existe un registro de asistencia para esta sesión y matrícula.',

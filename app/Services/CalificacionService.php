@@ -29,7 +29,7 @@ final class CalificacionService
 
     public function calcular(Matricula $matricula, int $actor): Calificacion
     {
-        return $this->transactions->execute(function () use ($matricula, $actor): Calificacion {
+        $calificacion = $this->transactions->execute(function () use ($matricula, $actor): Calificacion {
             $matricula->load('programacionAcademica');
             $programacion = $matricula->programacionAcademica;
             $criterios = $this->criterios->forProgramacion($programacion->id);
@@ -63,7 +63,7 @@ final class CalificacionService
             }
 
             $notaFinal = round($notaFinal, 2);
-            $estado = $notaFinal >= (float) $programacion->nota_minima_aprobatoria ? 'aprobada' : 'desaprobada';
+            $estado = $notaFinal >= AcademicRequirements::NOTA_MINIMA_APROBATORIA ? 'aprobada' : 'desaprobada';
 
             $before = $this->calificaciones->findByMatricula($matricula->id)?->getAttributes();
             $calificacion = $this->calificaciones->upsertForMatricula($matricula->id, [
@@ -85,6 +85,10 @@ final class CalificacionService
 
             return $calificacion;
         });
+
+        app(MatriculaCompletionService::class)->tryComplete($matricula, $actor);
+
+        return $calificacion;
     }
 
     private function calcularPromedioTareas(Matricula $matricula, float $escalaMaxima): ?float

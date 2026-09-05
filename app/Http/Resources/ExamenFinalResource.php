@@ -38,6 +38,11 @@ final class ExamenFinalResource extends JsonResource
             'nota_minima_aprobatoria' => $this->nota_minima_aprobatoria,
             'activo' => $this->activo,
             'creado_por_usuario_id' => $this->creado_por_usuario_id,
+            'recuperacion_titulo' => $this->recuperacion_titulo,
+            'recuperacion_descripcion' => $this->recuperacion_descripcion,
+            'recuperacion_at' => $this->recuperacion_at?->toIso8601String(),
+            'recuperacion_generada_at' => $this->recuperacion_generada_at?->toIso8601String(),
+            'tiene_recuperacion' => $this->tieneRecuperacionGenerada(),
             'tiene_preguntas' => $this->when(
                 $this->relationLoaded('preguntas') || isset($this->preguntas_activas_count),
                 function () {

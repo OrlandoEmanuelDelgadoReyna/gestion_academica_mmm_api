@@ -85,6 +85,87 @@ final class ExamenNotificacionDispatcher
         $this->dispatch($examen, $titulo, $contenido, [$alumnoUsuario], $actorId);
     }
 
+    public function examenProgramado(ExamenFinal $examen, int $actorId): void
+    {
+        $examen->loadMissing('programacionAcademica.curso');
+        $contenido = $this->contenidoExamen('Se programó un examen presencial.', $examen, false);
+
+        $this->dispatch($examen, 'Examen programado', $contenido, $this->alumnosActivosUsuarioIds($examen), $actorId);
+    }
+
+    public function recuperacionGenerada(ExamenFinal $examen, int $actorId): void
+    {
+        $examen->loadMissing('programacionAcademica.curso', 'notas');
+        $contenido = $this->contenidoExamen('Se programó un examen de recuperación.', $examen, true);
+
+        $this->dispatch($examen, 'Examen de recuperación', $contenido, $this->candidatosRecuperacionUsuarioIds($examen), $actorId);
+    }
+
+    private function contenidoExamen(string $encabezado, ExamenFinal $examen, bool $recuperacion): string
+    {
+        $curso = $examen->programacionAcademica?->curso?->nombre;
+        $tema = $recuperacion ? $examen->recuperacion_titulo : $examen->titulo;
+        $fecha = $recuperacion ? $examen->recuperacion_at : $examen->inicio_at;
+        $descripcion = $recuperacion ? $examen->recuperacion_descripcion : $examen->descripcion;
+        $lineas = [$encabezado];
+
+        if (filled($curso)) {
+            $lineas[] = 'Curso: '.$curso;
+        }
+        if (filled($tema)) {
+            $lineas[] = 'Tema: '.$tema;
+        }
+        if ($fecha !== null) {
+            $lineas[] = 'Fecha: '.$fecha->toDateTimeString();
+        }
+        if (filled($descripcion)) {
+            $lineas[] = 'Descripción: '.$descripcion;
+        }
+
+        return implode("\n", $lineas);
+    }
+
+    /** @return list<int> */
+    private function alumnosActivosUsuarioIds(ExamenFinal $examen): array
+    {
+        $examen->loadMissing('programacionAcademica.matriculas');
+        $ids = [];
+
+        foreach ($examen->programacionAcademica?->matriculas ?? [] as $matricula) {
+            if ($matricula->estado !== 'activa') {
+                continue;
+            }
+            $usuarioId = $this->usuarioDeMatricula((int) $matricula->id);
+            if ($usuarioId !== null) {
+                $ids[] = $usuarioId;
+            }
+        }
+
+        return $ids;
+    }
+
+    /** @return list<int> */
+    private function candidatosRecuperacionUsuarioIds(ExamenFinal $examen): array
+    {
+        $examen->loadMissing('programacionAcademica.matriculas', 'notas');
+        $ids = [];
+
+        foreach ($examen->programacionAcademica?->matriculas ?? [] as $matricula) {
+            $nota = $examen->notas->first(
+                fn (NotaExamenFinal $item) => (int) $item->matricula_id === (int) $matricula->id,
+            );
+            if (! $examen->esCandidatoRecuperacion($matricula, $nota)) {
+                continue;
+            }
+            $usuarioId = $this->usuarioDeMatricula((int) $matricula->id);
+            if ($usuarioId !== null) {
+                $ids[] = $usuarioId;
+            }
+        }
+
+        return $ids;
+    }
+
     /** @param list<int> $usuarioIds */
     private function dispatch(?ExamenFinal $examen, string $titulo, string $contenido, array $usuarioIds, int $actorId): void
     {

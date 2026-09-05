@@ -71,10 +71,30 @@ final class MatriculaService
 
     public function updateEstado(Matricula $matricula, string $estado, int $actor): Matricula
     {
-        if (! in_array($estado, ['activa', 'retirada', 'completada'], true)) {
+        if ($estado === 'completada') {
+            throw ValidationException::withMessages([
+                'estado' => 'La matrícula completada se asigna automáticamente cuando se cierran las condiciones académicas.',
+            ]);
+        }
+
+        if (! in_array($estado, ['activa', 'retirada'], true)) {
             throw ValidationException::withMessages(['estado' => 'El estado de matrícula no es válido.']);
         }
 
+        return $this->applyEstado($matricula, $estado, $actor);
+    }
+
+    public function completeAutomatically(Matricula $matricula, int $actor): Matricula
+    {
+        if ($matricula->estado === 'completada' || $matricula->estado !== 'activa') {
+            return $matricula;
+        }
+
+        return $this->applyEstado($matricula, 'completada', $actor);
+    }
+
+    private function applyEstado(Matricula $matricula, string $estado, int $actor): Matricula
+    {
         return $this->transactions->execute(function () use ($matricula, $estado, $actor): Matricula {
             $before = $matricula->getAttributes();
             $updated = $this->matriculas->updateEstado($matricula, $estado);

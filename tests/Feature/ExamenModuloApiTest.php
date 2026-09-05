@@ -92,14 +92,63 @@ final class ExamenModuloApiTest extends TestCase
             ->assertUnprocessable();
     }
 
-    public function test_docente_cannot_create_examen_for_foreign_or_assigned_programacion(): void
+    public function test_assigned_docente_can_create_examen(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('EX-DOC-C');
+        $docente = $this->createDocenteUser('docente.ex.create');
+        $this->assignDocente($docente, $programacion);
+
+        Sanctum::actingAs($docente);
+        $this->postJson('/api/v1/examenes-finales', $this->examenPayload($programacion->id, 'Examen del docente'))
+            ->assertSuccessful()
+            ->assertJsonPath('data.titulo', 'Examen del docente')
+            ->assertJsonPath('data.creado_por_usuario_id', $docente->id);
+    }
+
+    public function test_unassigned_docente_cannot_create_examen(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('EX-DOC-X');
+        $this->createDocenteUser('docente.ex.no');
+
+        $this->postJson('/api/v1/examenes-finales', $this->examenPayload($programacion->id, 'Docente ajeno'))
+            ->assertForbidden();
+    }
+
+    public function test_alumno_cannot_create_examen(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('EX-ALU-C');
+        $alumno = $this->createAlumnoUser('alumno.ex.create');
+        $this->enrollAlumno($alumno, $programacion);
+
+        Sanctum::actingAs($alumno);
+        $this->postJson('/api/v1/examenes-finales', $this->examenPayload($programacion->id, 'Alumno no crea'))
+            ->assertForbidden();
+    }
+
+    public function test_assigned_docente_can_edit_examen(): void
     {
         $admin = $this->actingAsAdmin();
         $ctx = $this->makeContext($admin, assignDocente: true);
 
         Sanctum::actingAs($ctx['docente']);
-        $this->postJson('/api/v1/examenes-finales', $this->examenPayload($ctx['programacion']->id, 'Docente no crea'))
-            ->assertForbidden();
+        $this->putJson("/api/v1/examenes-finales/{$ctx['examen']->id}", [
+            'titulo' => 'Tema editado por docente',
+            'descripcion' => 'Nueva descripción',
+        ])->assertSuccessful()->assertJsonPath('data.titulo', 'Tema editado por docente');
+    }
+
+    public function test_unassigned_docente_cannot_edit_examen(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $ctx = $this->makeContext($admin);
+        $this->createDocenteUser('docente.ex.edit.x');
+
+        $this->putJson("/api/v1/examenes-finales/{$ctx['examen']->id}", [
+            'titulo' => 'Hack',
+        ])->assertForbidden();
     }
 
     public function test_assigned_docente_can_view_examen(): void
@@ -491,7 +540,7 @@ final class ExamenModuloApiTest extends TestCase
         $this->assertStringNotContainsString('token', strtolower($contenido));
     }
 
-    public function test_recovery_grade_keeps_original_and_applies_best(): void
+    public function test_recovery_grade_keeps_original_and_uses_recuperacion_as_considerada(): void
     {
         $admin = $this->actingAsAdmin();
         $ctx = $this->makeContext($admin);
@@ -514,6 +563,26 @@ final class ExamenModuloApiTest extends TestCase
         $this->assertEquals('11.00', (string) $row->nota);
         $this->assertEquals('15.00', (string) $row->nota_recuperacion);
         $this->assertSame(SolicitudRecuperacionExamen::REALIZADA, $solicitud->fresh()->estado);
+    }
+
+    public function test_nota_considerada_uses_recuperacion_even_when_lower_than_ordinaria(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $ctx = $this->makeContext($admin);
+        $solicitud = $this->requestRecovery($ctx);
+
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/solicitudes-recuperacion-examen/{$solicitud->id}", [
+            'estado' => 'aprobada',
+        ])->assertOk();
+
+        $this->putJson("/api/v1/examenes-finales/{$ctx['examen']->id}/notas/{$ctx['matricula']->id}", [
+            'nota' => 8,
+        ])->assertOk()
+            ->assertJsonPath('data.nota', '11.00')
+            ->assertJsonPath('data.nota_recuperacion', '8.00')
+            ->assertJsonPath('data.nota_considerada', 8)
+            ->assertJsonPath('data.resultado', 'desaprobado');
     }
 
     public function test_alumno_cannot_request_recovery_for_another_student(): void

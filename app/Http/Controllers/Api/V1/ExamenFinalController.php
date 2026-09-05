@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AtenderSolicitudRecuperacionExamenRequest;
+use App\Http\Requests\GenerarRecuperacionExamenRequest;
 use App\Http\Requests\RegistrarNotaExamenRequest;
 use App\Http\Requests\StoreExamenFinalRequest;
 use App\Http\Requests\StorePreguntaExamenRequest;
@@ -94,6 +95,15 @@ final class ExamenFinalController extends Controller
         return new ExamenFinalResource($this->service->update($examenFinal, $request->validated(), $request->user()->id));
     }
 
+    public function generarRecuperacion(
+        GenerarRecuperacionExamenRequest $request,
+        ExamenFinal $examenFinal,
+    ): ExamenFinalResource {
+        return new ExamenFinalResource(
+            $this->service->generarRecuperacion($examenFinal, $request->validated(), $request->user()->id),
+        );
+    }
+
     public function destroy(Request $request, ExamenFinal $examenFinal): JsonResponse
     {
         $this->authorize('delete', $examenFinal);
@@ -172,6 +182,7 @@ final class ExamenFinalController extends Controller
                     ? (new SolicitudRecuperacionExamenResource($solicitud))->resolve()
                     : null,
                 'resultado' => $nota instanceof NotaExamenFinal ? $nota->resultado($minima) : null,
+                'candidato_recuperacion' => $examen->esCandidatoRecuperacion($matricula, $nota instanceof NotaExamenFinal ? $nota : null),
             ];
         });
 

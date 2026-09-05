@@ -142,7 +142,7 @@ final class EntregaTareaService
     {
         $entrega->loadMissing('tarea');
 
-        return $this->transactions->execute(function () use ($entrega, $data, $actorId): EntregaTarea {
+        $graded = $this->transactions->execute(function () use ($entrega, $data, $actorId): EntregaTarea {
             $before = $entrega->getAttributes();
             $updated = $this->entregas->update($entrega, [
                 'nota' => $data['nota'],
@@ -163,6 +163,12 @@ final class EntregaTareaService
 
             return $loaded;
         });
+
+        if ($graded->matricula !== null) {
+            app(MatriculaCompletionService::class)->recalcularYCompletar($graded->matricula, $actorId);
+        }
+
+        return $graded;
     }
 
     private function resolveOwnedActiveMatricula(Usuario $actor, Tarea $tarea, ?int $requestedMatriculaId): Matricula

@@ -78,7 +78,7 @@ class NotaExamenFinal extends Model
             return $original;
         }
 
-        return max($original, $recuperacion);
+        return $recuperacion;
     }
 
     public function resultado(?float $minima): ?string
