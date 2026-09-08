@@ -54,8 +54,10 @@ final class EloquentReporteRepository implements ReporteRepositoryInterface
     {
         $usuariosTotal = Usuario::query()->count();
         $usuariosActivos = Usuario::query()->where('activo', true)->count();
+        $usuariosInactivos = Usuario::query()->where('activo', false)->count();
         $cursosTotal = Curso::query()->count();
         $cursosActivos = Curso::query()->where('activo', true)->count();
+        $cursosInactivos = Curso::query()->where('activo', false)->count();
 
         return [
             'iglesias' => [
@@ -68,12 +70,12 @@ final class EloquentReporteRepository implements ReporteRepositoryInterface
             'usuarios' => [
                 'total' => $usuariosTotal,
                 'activos' => $usuariosActivos,
-                'inactivos' => $usuariosTotal - $usuariosActivos,
+                'inactivos' => $usuariosInactivos,
             ],
             'cursos' => [
                 'total' => $cursosTotal,
                 'activos' => $cursosActivos,
-                'inactivos' => $cursosTotal - $cursosActivos,
+                'inactivos' => $cursosInactivos,
             ],
         ];
     }
