@@ -134,11 +134,20 @@ final class OperacionApiTest extends TestCase
     {
         $this->getJson('/api/v1/reportes/academicos')
             ->assertOk()
-            ->assertJsonStructure(['data' => ['matriculas', 'calificaciones']]);
+            ->assertJsonStructure(['data' => [
+                'matriculas',
+                'calificaciones',
+                'certificados' => ['emitidos', 'universo'],
+            ]]);
 
         $this->getJson('/api/v1/reportes/administrativos')
             ->assertOk()
-            ->assertJsonStructure(['data' => ['iglesias', 'miembros']]);
+            ->assertJsonStructure(['data' => [
+                'iglesias',
+                'miembros',
+                'usuarios' => ['total', 'activos', 'inactivos'],
+                'cursos' => ['total', 'activos', 'inactivos'],
+            ]]);
 
         $this->getJson('/api/v1/reportes/certificados')
             ->assertOk()

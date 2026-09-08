@@ -6,9 +6,11 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\Calificacion;
 use App\Models\Certificado;
+use App\Models\Curso;
 use App\Models\Iglesia;
 use App\Models\Matricula;
 use App\Models\Miembro;
+use App\Models\Usuario;
 use App\Repositories\Contracts\ReporteRepositoryInterface;
 use Illuminate\Support\Collection;
 
@@ -26,9 +28,11 @@ final class EloquentReporteRepository implements ReporteRepositoryInterface
             ->groupBy('estado')
             ->pluck('total', 'estado');
 
+        $matriculasTotal = Matricula::query()->count();
+
         return [
             'matriculas' => [
-                'total' => Matricula::query()->count(),
+                'total' => $matriculasTotal,
                 'por_estado' => $matriculasPorEstado,
             ],
             'calificaciones' => [
@@ -36,11 +40,23 @@ final class EloquentReporteRepository implements ReporteRepositoryInterface
                 'por_estado' => $calificacionesPorEstado,
                 'promedio_nota_final' => Calificacion::query()->avg('nota_final'),
             ],
+            'certificados' => [
+                'emitidos' => Certificado::query()
+                    ->where('estado', Certificado::ESTADO_EMITIDO)
+                    ->whereNotNull('programacion_academica_id')
+                    ->count(),
+                'universo' => $matriculasTotal,
+            ],
         ];
     }
 
     public function administrativosSummary(): array
     {
+        $usuariosTotal = Usuario::query()->count();
+        $usuariosActivos = Usuario::query()->where('activo', true)->count();
+        $cursosTotal = Curso::query()->count();
+        $cursosActivos = Curso::query()->where('activo', true)->count();
+
         return [
             'iglesias' => [
                 'total' => Iglesia::query()->count(),
@@ -48,6 +64,16 @@ final class EloquentReporteRepository implements ReporteRepositoryInterface
             ],
             'miembros' => [
                 'total' => Miembro::query()->count(),
+            ],
+            'usuarios' => [
+                'total' => $usuariosTotal,
+                'activos' => $usuariosActivos,
+                'inactivos' => $usuariosTotal - $usuariosActivos,
+            ],
+            'cursos' => [
+                'total' => $cursosTotal,
+                'activos' => $cursosActivos,
+                'inactivos' => $cursosTotal - $cursosActivos,
             ],
         ];
     }
