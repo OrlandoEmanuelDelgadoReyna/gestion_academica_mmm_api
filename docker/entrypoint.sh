@@ -39,6 +39,10 @@ if [ "${APP_ENV:-production}" != "local" ]; then
   php artisan view:cache --no-ansi || true
 fi
 
+# Apply pending schema changes on boot. The anuncio_id migration is
+# idempotent and only adds a nullable column; it does not delete rows.
+php artisan migrate --force --no-ansi
+
 # Nginx listens on Railway's dynamic PORT
 envsubst '${PORT}' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
 
