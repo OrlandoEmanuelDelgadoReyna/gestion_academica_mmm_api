@@ -84,6 +84,7 @@ final class AnuncioService
     {
         $this->transactions->execute(function () use ($anuncio, $actorId): void {
             $before = $anuncio->getAttributes();
+            $this->notificaciones->deleteGeneratedByAnuncio((int) $anuncio->id);
             $this->anuncios->delete($anuncio);
             $this->auditorias->record($actorId, 'DELETE', 'anuncios', $anuncio->id, $before, null);
         });
@@ -101,6 +102,7 @@ final class AnuncioService
             'titulo' => mb_substr((string) $anuncio->titulo, 0, 150),
             'contenido' => (string) $anuncio->contenido,
             'tipo' => 'anuncio',
+            'anuncio_id' => $anuncio->id,
         ], $usuarioIds, $actorId);
     }
 

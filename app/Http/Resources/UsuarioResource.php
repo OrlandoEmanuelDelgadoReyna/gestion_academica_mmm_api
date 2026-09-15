@@ -13,6 +13,26 @@ final class UsuarioResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return ['id' => $this->id, 'nombre_usuario' => $this->nombre_usuario, 'activo' => $this->activo, 'ultimo_acceso_at' => $this->ultimo_acceso_at?->toAtomString(), 'miembro' => ['id' => $this->miembro?->id, 'nombre_completo' => $this->miembro?->nombre_completo], 'roles' => $this->whenLoaded('roles', fn () => $this->roles->map(fn ($rol) => ['id' => $rol->id, 'codigo' => $rol->codigo, 'nombre' => $rol->nombre]))];
+        return [
+            'id' => $this->id,
+            'nombre_usuario' => $this->nombre_usuario,
+            'activo' => $this->activo,
+            'ultimo_acceso_at' => $this->ultimo_acceso_at?->toAtomString(),
+            'miembro' => [
+                'id' => $this->miembro?->id,
+                'iglesia_id' => $this->miembro?->iglesia_id !== null
+                    ? (int) $this->miembro->iglesia_id
+                    : null,
+                'nombre_completo' => $this->miembro?->nombre_completo,
+            ],
+            'roles' => $this->whenLoaded(
+                'roles',
+                fn () => $this->roles->map(fn ($rol) => [
+                    'id' => $rol->id,
+                    'codigo' => $rol->codigo,
+                    'nombre' => $rol->nombre,
+                ]),
+            ),
+        ];
     }
 }

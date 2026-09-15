@@ -116,6 +116,11 @@ final class NotificacionService
         return $destinatario;
     }
 
+    public function deleteGeneratedByAnuncio(int $anuncioId): void
+    {
+        $this->notificaciones->deleteGeneratedByAnuncio($anuncioId);
+    }
+
     /** @param  list<int>  $usuarioIds */
     public function dispatch(array $data, array $usuarioIds, int $actorId): Notificacion
     {

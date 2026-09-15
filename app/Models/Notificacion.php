@@ -16,7 +16,7 @@ class Notificacion extends Model
 
     protected $table = 'notificaciones';
 
-    protected $fillable = ['iglesia_id', 'titulo', 'contenido', 'tipo', 'enviado_at', 'creado_por_usuario_id'];
+    protected $fillable = ['iglesia_id', 'titulo', 'contenido', 'tipo', 'anuncio_id', 'enviado_at', 'creado_por_usuario_id'];
 
     protected function casts(): array
     {
@@ -31,6 +31,11 @@ class Notificacion extends Model
     public function creadoPor(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'creado_por_usuario_id');
+    }
+
+    public function anuncio(): BelongsTo
+    {
+        return $this->belongsTo(Anuncio::class);
     }
 
     public function destinatarios(): HasMany

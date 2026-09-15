@@ -29,6 +29,16 @@ final class ComunicacionApiTest extends TestCase
         $this->seedInstitutionalCatalog();
     }
 
+    public function test_me_includes_authenticated_member_iglesia_id(): void
+    {
+        $this->actingAsAdmin();
+        $churchId = $this->principalChurchId();
+
+        $this->getJson('/api/v1/me')
+            ->assertOk()
+            ->assertJsonPath('data.miembro.iglesia_id', $churchId);
+    }
+
     public function test_admin_creates_edits_and_deletes_anuncio(): void
     {
         $admin = $this->actingAsAdmin();
@@ -111,6 +121,79 @@ final class ComunicacionApiTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, Notificacion::query()->where('tipo', 'anuncio')->count());
+    }
+
+    public function test_published_anuncio_persists_anuncio_id_on_its_notification(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $this->createAlumnoUser('alumno.anun.fk');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+
+        $notificacion = Notificacion::query()->where('tipo', 'anuncio')->first();
+        $this->assertNotNull($notificacion);
+        $this->assertSame($id, (int) $notificacion->anuncio_id);
+    }
+
+    public function test_deleting_anuncio_removes_only_its_generated_notifications(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $alumno = $this->createAlumnoUser('alumno.anun.purge');
+        $ajeno = $this->createUserInOtherChurch('alumno.anun.purge.x');
+
+        Sanctum::actingAs($admin);
+        $keepId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Anuncio que permanece'],
+        ))->assertCreated()->json('data.id');
+
+        $deleteId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Anuncio a eliminar'],
+        ))->assertCreated()->json('data.id');
+
+        $keepNotice = Notificacion::query()->where('anuncio_id', $keepId)->firstOrFail();
+        $deleteNotice = Notificacion::query()->where('anuncio_id', $deleteId)->firstOrFail();
+        $tareaNotice = $this->dispatchTo([$alumno->id], 'Nueva tarea publicada', 'tarea');
+
+        Sanctum::actingAs($ajeno);
+        $this->deleteJson("/api/v1/anuncios/{$deleteId}")->assertForbidden();
+        $this->assertDatabaseHas('notificaciones', ['id' => $deleteNotice->id]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $deleteNotice->id,
+        ]);
+
+        Sanctum::actingAs($admin);
+        $this->deleteJson("/api/v1/anuncios/{$deleteId}")->assertNoContent();
+
+        $this->assertDatabaseMissing('anuncios', ['id' => $deleteId]);
+        $this->assertDatabaseMissing('notificaciones', ['id' => $deleteNotice->id]);
+        $this->assertDatabaseMissing('notificacion_destinatarios', [
+            'notificacion_id' => $deleteNotice->id,
+        ]);
+        $this->assertDatabaseHas('anuncios', ['id' => $keepId]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $keepNotice->id,
+            'anuncio_id' => $keepId,
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $tareaNotice->id,
+            'tipo' => 'tarea',
+        ]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $tareaNotice->id,
+            'usuario_id' => $alumno->id,
+        ]);
+
+        Sanctum::actingAs($alumno);
+        $inboxIds = collect($this->getJson('/api/v1/notificaciones/mis')->assertOk()->json('data'))
+            ->pluck('id');
+        $this->assertTrue($inboxIds->contains($keepNotice->id));
+        $this->assertTrue($inboxIds->contains($tareaNotice->id));
+        $this->assertFalse($inboxIds->contains($deleteNotice->id));
     }
 
     public function test_invalid_anuncio_estado_is_rejected(): void
