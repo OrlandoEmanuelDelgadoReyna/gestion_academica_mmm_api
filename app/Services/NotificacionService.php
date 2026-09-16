@@ -151,6 +151,24 @@ final class NotificacionService
         });
     }
 
+    /**
+     * One-shot cleanup of announcement notices created before anuncio_id existed.
+     *
+     * @return array{notificaciones: int, destinatarios: int}
+     */
+    public function deleteLegacyAnuncioNotificaciones(): array
+    {
+        return $this->transactions->execute(
+            fn (): array => $this->notificaciones->deleteLegacyAnuncioNotificaciones(),
+        );
+    }
+
+    /** @return \Illuminate\Support\Collection<int, Notificacion> */
+    public function listLegacyAnuncioNotificaciones(): \Illuminate\Support\Collection
+    {
+        return $this->notificaciones->listLegacyAnuncioNotificaciones();
+    }
+
     /** @param  list<int>  $usuarioIds */
     public function dispatch(array $data, array $usuarioIds, int $actorId): Notificacion
     {

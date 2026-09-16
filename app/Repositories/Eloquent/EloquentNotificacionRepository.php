@@ -8,6 +8,7 @@ use App\Models\Notificacion;
 use App\Models\NotificacionDestinatario;
 use App\Repositories\Contracts\NotificacionRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 final class EloquentNotificacionRepository implements NotificacionRepositoryInterface
 {
@@ -128,5 +129,35 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
         Notificacion::query()->whereIn('id', $ids)->delete();
 
         return $ids->count();
+    }
+
+    public function listLegacyAnuncioNotificaciones(): Collection
+    {
+        return Notificacion::query()
+            ->where('tipo', 'anuncio')
+            ->whereNull('anuncio_id')
+            ->orderBy('id')
+            ->get(['id', 'titulo', 'iglesia_id', 'enviado_at']);
+    }
+
+    public function deleteLegacyAnuncioNotificaciones(): array
+    {
+        $ids = Notificacion::query()
+            ->where('tipo', 'anuncio')
+            ->whereNull('anuncio_id')
+            ->pluck('id');
+        if ($ids->isEmpty()) {
+            return ['notificaciones' => 0, 'destinatarios' => 0];
+        }
+
+        $destinatarios = NotificacionDestinatario::query()
+            ->whereIn('notificacion_id', $ids)
+            ->delete();
+        $notificaciones = Notificacion::query()->whereIn('id', $ids)->delete();
+
+        return [
+            'notificaciones' => (int) $notificaciones,
+            'destinatarios' => (int) $destinatarios,
+        ];
     }
 }

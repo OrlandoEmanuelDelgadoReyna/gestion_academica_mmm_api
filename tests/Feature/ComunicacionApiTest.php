@@ -261,6 +261,69 @@ final class ComunicacionApiTest extends TestCase
         $this->assertDatabaseHas('anuncios', ['id' => $expireId]);
     }
 
+    public function test_legacy_anuncio_purge_command_previews_then_deletes_only_null_anuncio_id(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $alumno = $this->createAlumnoUser('alumno.anun.legacy');
+
+        Sanctum::actingAs($admin);
+        $linkedId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Anuncio con fk'],
+        ))->assertCreated()->json('data.id');
+
+        $linkedNotice = Notificacion::query()->where('anuncio_id', $linkedId)->firstOrFail();
+        $legacyNotice = $this->dispatchTo([$alumno->id], 'Aviso legado', 'anuncio');
+        $tareaNotice = $this->dispatchTo([$alumno->id], 'Nueva tarea publicada', 'tarea');
+        $examenNotice = $this->dispatchTo([$alumno->id], 'Nota de examen registrada', 'examen');
+
+        $this->assertNull($legacyNotice->anuncio_id);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $legacyNotice->id,
+            'usuario_id' => $alumno->id,
+        ]);
+
+        $this->artisan('notificaciones:purge-legacy-anuncios')
+            ->expectsOutput('Notificaciones legacy (tipo=anuncio AND anuncio_id IS NULL): 1')
+            ->expectsOutput('Nada fue eliminado. Ejecute con --force para borrar únicamente estas filas y sus destinatarios.')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('notificaciones', ['id' => $legacyNotice->id, 'anuncio_id' => null]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $legacyNotice->id,
+        ]);
+
+        $this->artisan('notificaciones:purge-legacy-anuncios', ['--force' => true])
+            ->expectsOutput('Notificaciones eliminadas: 1')
+            ->expectsOutput('Destinatarios eliminados: 1')
+            ->assertSuccessful();
+
+        $this->assertDatabaseMissing('notificaciones', ['id' => $legacyNotice->id]);
+        $this->assertDatabaseMissing('notificacion_destinatarios', [
+            'notificacion_id' => $legacyNotice->id,
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $linkedNotice->id,
+            'anuncio_id' => $linkedId,
+            'tipo' => 'anuncio',
+        ]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $linkedNotice->id,
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $tareaNotice->id,
+            'tipo' => 'tarea',
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $examenNotice->id,
+            'tipo' => 'examen',
+        ]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $tareaNotice->id,
+            'usuario_id' => $alumno->id,
+        ]);
+    }
+
     public function test_invalid_anuncio_estado_is_rejected(): void
     {
         $this->actingAsAdmin();

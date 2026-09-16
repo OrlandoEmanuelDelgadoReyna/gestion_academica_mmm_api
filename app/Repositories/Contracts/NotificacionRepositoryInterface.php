@@ -7,6 +7,7 @@ namespace App\Repositories\Contracts;
 use App\Models\Notificacion;
 use App\Models\NotificacionDestinatario;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 
 interface NotificacionRepositoryInterface
 {
@@ -33,4 +34,10 @@ interface NotificacionRepositoryInterface
 
     /** @param  list<int>  $anuncioIds */
     public function deleteGeneratedByAnuncios(array $anuncioIds): int;
+
+    /** @return Collection<int, Notificacion> */
+    public function listLegacyAnuncioNotificaciones(): Collection;
+
+    /** @return array{notificaciones: int, destinatarios: int} */
+    public function deleteLegacyAnuncioNotificaciones(): array;
 }
