@@ -10,6 +10,7 @@ use App\Models\NotificacionDestinatario;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
 use App\Repositories\Contracts\NotificacionRepositoryInterface;
+use App\Support\AnuncioVigencia;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
@@ -124,6 +125,11 @@ final class NotificacionService
         $this->notificaciones->deleteGeneratedByAnuncio($anuncioId);
     }
 
+    public function existsForAnuncio(int $anuncioId): bool
+    {
+        return $this->notificaciones->existsForAnuncio($anuncioId);
+    }
+
     /**
      * Permanently deletes announcement notices the day after vence_at, at 00:00 America/Lima.
      *
@@ -137,10 +143,7 @@ final class NotificacionService
                 ->whereNotNull('vence_at')
                 ->get(['id', 'vence_at'])
                 ->filter(function (Anuncio $anuncio) use ($nowLima): bool {
-                    $purgeAt = $anuncio->vence_at?->copy()
-                        ->timezone(self::CHURCH_TIMEZONE)
-                        ->startOfDay()
-                        ->addDay();
+                    $purgeAt = AnuncioVigencia::purgeAt($anuncio->vence_at);
 
                     return $purgeAt !== null && $nowLima->gte($purgeAt);
                 })

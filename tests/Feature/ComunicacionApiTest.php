@@ -124,6 +124,39 @@ final class ComunicacionApiTest extends TestCase
         $this->assertSame(1, Notificacion::query()->where('tipo', 'anuncio')->count());
     }
 
+    public function test_updating_published_anuncio_recreates_missing_notification_once(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $alumno = $this->createAlumnoUser('alumno.anun.recreate');
+        $docente = $this->createDocenteUser('docente.anun.recreate');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
+        app(\App\Services\NotificacionService::class)->deleteGeneratedByAnuncio($id);
+        $this->assertSame(0, Notificacion::query()->where('anuncio_id', $id)->count());
+
+        $this->putJson("/api/v1/anuncios/{$id}", [
+            'titulo' => 'Sigue publicado',
+            'estado' => 'publicado',
+        ])->assertOk();
+
+        $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
+        $notificacion = Notificacion::query()->where('anuncio_id', $id)->firstOrFail();
+        $destinatarios = NotificacionDestinatario::query()
+            ->where('notificacion_id', $notificacion->id)
+            ->pluck('usuario_id');
+        $this->assertTrue($destinatarios->contains($admin->id));
+        $this->assertTrue($destinatarios->contains($alumno->id));
+        $this->assertTrue($destinatarios->contains($docente->id));
+
+        $this->putJson("/api/v1/anuncios/{$id}", ['titulo' => 'Todavía uno'])->assertOk();
+        $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
+    }
+
     public function test_published_anuncio_persists_anuncio_id_on_its_notification(): void
     {
         $admin = $this->actingAsAdmin();
@@ -386,7 +419,32 @@ final class ComunicacionApiTest extends TestCase
         $this->assertFalse($ids->contains($id));
     }
 
-    public function test_anuncio_vigencia_lima_midnight_is_not_treated_as_end_of_day(): void
+    public function test_anuncio_vigencia_naive_midnight_vence_at_is_end_of_lima_day(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-16 11:30:00', 'America/Lima'));
+        $admin = $this->actingAsAdmin();
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge($this->anuncioPayload('publicado'), [
+            'titulo' => 'Vence medianoche naive',
+            'vence_at' => '2026-09-16 00:00:00',
+        ]))->assertCreated()->json('data.id');
+
+        $this->assertSame(
+            '2026-09-16',
+            $this->getJson("/api/v1/anuncios/{$id}")->assertOk()->json('data.vence_on'),
+        );
+
+        $this->createDocenteUser('docente.vig.midnight');
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
+
+        $this->travelTo(Carbon::parse('2026-09-17 00:00:00', 'America/Lima'));
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertFalse($ids->contains($id));
+    }
+
+    public function test_legacy_utc_midnight_vence_at_stays_open_during_lima_day(): void
     {
         $this->travelTo(Carbon::parse('2026-09-16 11:30:00', 'America/Lima'));
         $admin = $this->actingAsAdmin();
@@ -394,16 +452,69 @@ final class ComunicacionApiTest extends TestCase
         $anuncio = Anuncio::query()->create($this->anuncioAttributes(
             $admin,
             'publicado',
-            Carbon::parse('2026-09-15 10:00:00', 'America/Lima'),
-            Carbon::parse('2026-09-16 00:00:00', 'America/Lima'),
+            '2026-09-16 08:00:00',
+            '2026-09-16 00:00:00',
         ));
 
-        $this->assertFalse($anuncio->fresh()->isVigente());
-        $this->assertFalse(Anuncio::query()->vigente()->whereKey($anuncio->id)->exists());
+        $this->assertTrue($anuncio->fresh()->isVigente());
+        $this->assertTrue(Anuncio::query()->vigente()->whereKey($anuncio->id)->exists());
 
-        $this->createDocenteUser('docente.vig.midnight');
+        $this->createDocenteUser('docente.vig.legacy');
         $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
-        $this->assertFalse($ids->contains($anuncio->id));
+        $this->assertTrue($ids->contains($anuncio->id));
+    }
+
+    public function test_create_without_client_timestamps_is_visible_to_docente_and_alumno(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-16 12:16:00', 'America/Lima'));
+        $admin = $this->actingAsAdmin();
+        $docente = $this->createDocenteUser('docente.anun.now');
+        $alumno = $this->createAlumnoUser('alumno.anun.now');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+
+        $anuncio = Anuncio::query()->findOrFail($id);
+        $this->assertSame('publicado', $anuncio->estado);
+        $this->assertNotNull($anuncio->publicado_at);
+        $this->assertNull($anuncio->vence_at);
+        $this->assertTrue($anuncio->isVigente());
+
+        Sanctum::actingAs($docente);
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
+
+        Sanctum::actingAs($alumno);
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
+    }
+
+    public function test_update_rewrites_naive_midnight_vence_at_to_lima_end_of_day(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-16 11:30:00', 'America/Lima'));
+        $admin = $this->actingAsAdmin();
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge($this->anuncioPayload('publicado'), [
+            'titulo' => 'Para editar vigencia',
+            'vence_at' => '2026-09-16 00:00:00',
+        ]))->assertCreated()->json('data.id');
+
+        $this->putJson("/api/v1/anuncios/{$id}", [
+            'titulo' => 'Vigencia normalizada',
+            'vence_at' => '2026-09-16',
+        ])->assertOk();
+
+        $anuncio = Anuncio::query()->findOrFail($id);
+        $this->assertTrue(
+            Carbon::parse('2026-09-16 23:59:59', 'America/Lima')->utc()->equalTo($anuncio->vence_at),
+        );
+
+        $this->createDocenteUser('docente.vig.update');
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
     }
 
     public function test_anuncio_vigencia_expired_yesterday_is_closed(): void

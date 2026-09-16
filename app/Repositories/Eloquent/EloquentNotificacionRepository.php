@@ -99,6 +99,11 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
         return $destinatario->refresh();
     }
 
+    public function existsForAnuncio(int $anuncioId): bool
+    {
+        return Notificacion::query()->where('anuncio_id', $anuncioId)->exists();
+    }
+
     public function deleteGeneratedByAnuncio(int $anuncioId): void
     {
         $ids = Notificacion::query()->where('anuncio_id', $anuncioId)->pluck('id');

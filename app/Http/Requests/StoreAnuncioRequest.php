@@ -25,7 +25,7 @@ final class StoreAnuncioRequest extends FormRequest
             'contenido' => ['required', 'string'],
             'estado' => ['required', 'string', Rule::in(Anuncio::ESTADOS)],
             'publicado_at' => ['nullable', 'date'],
-            'vence_at' => ['nullable', 'date', 'after_or_equal:publicado_at'],
+            'vence_at' => ['nullable', 'date'],
         ];
     }
 

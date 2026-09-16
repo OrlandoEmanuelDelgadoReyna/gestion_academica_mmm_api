@@ -35,7 +35,7 @@ final class AnuncioService
     public function create(array $data, int $actorId): Anuncio
     {
         $data['creado_por_usuario_id'] = $actorId;
-        $data = $this->normalizePublication($data);
+        $data = $this->normalizePublication($data, fillingPublishedNow: true);
         $this->assertPublicationWindow($data);
 
         return $this->transactions->execute(function () use ($data, $actorId): Anuncio {
@@ -62,14 +62,12 @@ final class AnuncioService
                 'estado',
                 'publicado_at',
                 'vence_at',
-            ]), $data));
+            ]), $data), fillingPublishedNow: ! $wasPublished);
             $this->assertPublicationWindow($merged);
 
             $payload = array_merge($data, $this->publicationTimestamps($merged, $wasPublished));
             foreach (['publicado_at', 'vence_at'] as $field) {
-                if (array_key_exists($field, $merged)) {
-                    $payload[$field] = $merged[$field];
-                }
+                $payload[$field] = $merged[$field] ?? null;
             }
 
             $before = $locked->getAttributes();
@@ -78,6 +76,9 @@ final class AnuncioService
 
             if (! $wasPublished && $updated->isPublicado()) {
                 $this->auditorias->record($actorId, 'PUBLISH', 'anuncios', $updated->id, $before, $updated->getAttributes());
+            }
+
+            if ($updated->isPublicado()) {
                 $this->dispatchPublication($updated, $actorId);
             }
 
@@ -97,6 +98,10 @@ final class AnuncioService
 
     private function dispatchPublication(Anuncio $anuncio, int $actorId): void
     {
+        if ($this->notificaciones->existsForAnuncio((int) $anuncio->id)) {
+            return;
+        }
+
         $usuarioIds = $this->academicAccess->activeUsuarioIdsOfIglesia((int) $anuncio->iglesia_id);
         if ($usuarioIds === []) {
             return;
@@ -111,11 +116,26 @@ final class AnuncioService
         ], $usuarioIds, $actorId);
     }
 
-    /** @param  array<string, mixed>  $data */
-    private function normalizePublication(array $data): array
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizePublication(array $data, bool $fillingPublishedNow): array
     {
-        if (($data['estado'] ?? null) === Anuncio::PUBLICADO && empty($data['publicado_at'])) {
-            $data['publicado_at'] = now();
+        if (array_key_exists('publicado_at', $data) && $this->isBlankDate($data['publicado_at'])) {
+            $data['publicado_at'] = null;
+        }
+
+        if (array_key_exists('vence_at', $data) && $this->isBlankDate($data['vence_at'])) {
+            $data['vence_at'] = null;
+        }
+
+        if (
+            $fillingPublishedNow
+            && ($data['estado'] ?? null) === Anuncio::PUBLICADO
+            && empty($data['publicado_at'])
+        ) {
+            $data['publicado_at'] = now()->utc();
         }
 
         if (array_key_exists('publicado_at', $data)) {
@@ -127,6 +147,11 @@ final class AnuncioService
         }
 
         return $data;
+    }
+
+    private function isBlankDate(mixed $value): bool
+    {
+        return $value === null || $value === '';
     }
 
     /**
