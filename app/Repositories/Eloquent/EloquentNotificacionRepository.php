@@ -108,4 +108,25 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
         NotificacionDestinatario::query()->whereIn('notificacion_id', $ids)->delete();
         Notificacion::query()->whereIn('id', $ids)->delete();
     }
+
+    public function deleteGeneratedByAnuncios(array $anuncioIds): int
+    {
+        $anuncioIds = array_values(array_unique(array_filter($anuncioIds)));
+        if ($anuncioIds === []) {
+            return 0;
+        }
+
+        $ids = Notificacion::query()
+            ->where('tipo', 'anuncio')
+            ->whereIn('anuncio_id', $anuncioIds)
+            ->pluck('id');
+        if ($ids->isEmpty()) {
+            return 0;
+        }
+
+        NotificacionDestinatario::query()->whereIn('notificacion_id', $ids)->delete();
+        Notificacion::query()->whereIn('id', $ids)->delete();
+
+        return $ids->count();
+    }
 }

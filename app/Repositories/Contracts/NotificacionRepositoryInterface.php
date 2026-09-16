@@ -30,4 +30,7 @@ interface NotificacionRepositoryInterface
     public function markAsRead(Notificacion $notificacion, int $usuarioId): ?NotificacionDestinatario;
 
     public function deleteGeneratedByAnuncio(int $anuncioId): void;
+
+    /** @param  list<int>  $anuncioIds */
+    public function deleteGeneratedByAnuncios(array $anuncioIds): int;
 }

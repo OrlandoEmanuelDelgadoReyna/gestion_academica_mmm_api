@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Anuncio;
 use App\Models\Notificacion;
 use App\Models\NotificacionDestinatario;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
@@ -14,6 +15,8 @@ use Illuminate\Validation\ValidationException;
 
 final class NotificacionService
 {
+    private const CHURCH_TIMEZONE = 'America/Lima';
+
     public function __construct(
         private NotificacionRepositoryInterface $notificaciones,
         private DatabaseTransactionRepositoryInterface $transactions,
@@ -119,6 +122,33 @@ final class NotificacionService
     public function deleteGeneratedByAnuncio(int $anuncioId): void
     {
         $this->notificaciones->deleteGeneratedByAnuncio($anuncioId);
+    }
+
+    /**
+     * Permanently deletes announcement notices the day after vence_at, at 00:00 America/Lima.
+     *
+     * Announcements without vence_at are never purged. Other notification types are ignored.
+     */
+    public function purgeExpiredAnuncioNotificaciones(): int
+    {
+        return $this->transactions->execute(function (): int {
+            $nowLima = now(self::CHURCH_TIMEZONE);
+            $expiredAnuncioIds = Anuncio::query()
+                ->whereNotNull('vence_at')
+                ->get(['id', 'vence_at'])
+                ->filter(function (Anuncio $anuncio) use ($nowLima): bool {
+                    $purgeAt = $anuncio->vence_at?->copy()
+                        ->timezone(self::CHURCH_TIMEZONE)
+                        ->startOfDay()
+                        ->addDay();
+
+                    return $purgeAt !== null && $nowLima->gte($purgeAt);
+                })
+                ->pluck('id')
+                ->all();
+
+            return $this->notificaciones->deleteGeneratedByAnuncios($expiredAnuncioIds);
+        });
     }
 
     /** @param  list<int>  $usuarioIds */

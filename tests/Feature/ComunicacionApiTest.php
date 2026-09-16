@@ -12,6 +12,7 @@ use App\Models\ProgramacionAcademica;
 use App\Models\Tarea;
 use App\Models\Usuario;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
@@ -194,6 +195,70 @@ final class ComunicacionApiTest extends TestCase
         $this->assertTrue($inboxIds->contains($keepNotice->id));
         $this->assertTrue($inboxIds->contains($tareaNotice->id));
         $this->assertFalse($inboxIds->contains($deleteNotice->id));
+    }
+
+    public function test_expired_anuncio_notifications_are_purged_the_following_lima_midnight(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $alumno = $this->createAlumnoUser('alumno.anun.exp');
+
+        $this->travelTo(Carbon::parse('2026-09-14 10:00:00', 'America/Lima'));
+
+        Sanctum::actingAs($admin);
+        $keepId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            [
+                'titulo' => 'Sigue vigente',
+                'vence_at' => '2026-09-20 23:59:59',
+            ],
+        ))->assertCreated()->json('data.id');
+
+        $expireId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            [
+                'titulo' => 'Vence hoy',
+                'vence_at' => '2026-09-14 23:59:59',
+            ],
+        ))->assertCreated()->json('data.id');
+
+        $keepNotice = Notificacion::query()->where('anuncio_id', $keepId)->firstOrFail();
+        $expireNotice = Notificacion::query()->where('anuncio_id', $expireId)->firstOrFail();
+        $tareaNotice = $this->dispatchTo([$alumno->id], 'Nueva tarea publicada', 'tarea');
+        $legacyNotice = $this->dispatchTo([$alumno->id], 'Aviso legado', 'anuncio');
+
+        $this->artisan('notificaciones:purge-expired-anuncios')
+            ->expectsOutput('Notificaciones de anuncios vencidos eliminadas: 0.')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('notificaciones', ['id' => $expireNotice->id]);
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $expireNotice->id,
+        ]);
+
+        $this->travelTo(Carbon::parse('2026-09-15 00:00:00', 'America/Lima'));
+        $this->artisan('notificaciones:purge-expired-anuncios')
+            ->expectsOutput('Notificaciones de anuncios vencidos eliminadas: 1.')
+            ->assertSuccessful();
+
+        $this->assertDatabaseMissing('notificaciones', ['id' => $expireNotice->id]);
+        $this->assertDatabaseMissing('notificacion_destinatarios', [
+            'notificacion_id' => $expireNotice->id,
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $keepNotice->id,
+            'anuncio_id' => $keepId,
+            'tipo' => 'anuncio',
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $tareaNotice->id,
+            'tipo' => 'tarea',
+        ]);
+        $this->assertDatabaseHas('notificaciones', [
+            'id' => $legacyNotice->id,
+            'tipo' => 'anuncio',
+            'anuncio_id' => null,
+        ]);
+        $this->assertDatabaseHas('anuncios', ['id' => $expireId]);
     }
 
     public function test_invalid_anuncio_estado_is_rejected(): void
