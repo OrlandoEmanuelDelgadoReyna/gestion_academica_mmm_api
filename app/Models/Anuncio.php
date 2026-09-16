@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\AnuncioVigencia;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -49,15 +50,7 @@ class Anuncio extends Model
 
     public function scopeVigente(Builder $query): Builder
     {
-        $now = now();
-
-        return $query->publicado()
-            ->where(function (Builder $builder) use ($now): void {
-                $builder->whereNull('publicado_at')->orWhere('publicado_at', '<=', $now);
-            })
-            ->where(function (Builder $builder) use ($now): void {
-                $builder->whereNull('vence_at')->orWhere('vence_at', '>=', $now);
-            });
+        return AnuncioVigencia::constrainVigente($query->publicado());
     }
 
     public function isPublicado(): bool
@@ -71,14 +64,6 @@ class Anuncio extends Model
             return false;
         }
 
-        if ($this->publicado_at !== null && $this->publicado_at->gt(now())) {
-            return false;
-        }
-
-        if ($this->vence_at !== null && $this->vence_at->lt(now())) {
-            return false;
-        }
-
-        return true;
+        return AnuncioVigencia::isOpen($this->publicado_at, $this->vence_at);
     }
 }

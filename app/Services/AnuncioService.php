@@ -8,6 +8,7 @@ use App\Models\Anuncio;
 use App\Repositories\Contracts\AnuncioRepositoryInterface;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
+use App\Support\AnuncioVigencia;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
 
@@ -64,11 +65,15 @@ final class AnuncioService
             ]), $data));
             $this->assertPublicationWindow($merged);
 
+            $payload = array_merge($data, $this->publicationTimestamps($merged, $wasPublished));
+            foreach (['publicado_at', 'vence_at'] as $field) {
+                if (array_key_exists($field, $merged)) {
+                    $payload[$field] = $merged[$field];
+                }
+            }
+
             $before = $locked->getAttributes();
-            $updated = $this->anuncios->update(
-                $locked,
-                array_merge($data, $this->publicationTimestamps($merged, $wasPublished)),
-            );
+            $updated = $this->anuncios->update($locked, $payload);
             $this->auditorias->record($actorId, 'UPDATE', 'anuncios', $updated->id, $before, $updated->getAttributes());
 
             if (! $wasPublished && $updated->isPublicado()) {
@@ -111,6 +116,14 @@ final class AnuncioService
     {
         if (($data['estado'] ?? null) === Anuncio::PUBLICADO && empty($data['publicado_at'])) {
             $data['publicado_at'] = now();
+        }
+
+        if (array_key_exists('publicado_at', $data)) {
+            $data['publicado_at'] = AnuncioVigencia::parsePublicadoAt($data['publicado_at']);
+        }
+
+        if (array_key_exists('vence_at', $data)) {
+            $data['vence_at'] = AnuncioVigencia::parseVenceAt($data['vence_at']);
         }
 
         return $data;
