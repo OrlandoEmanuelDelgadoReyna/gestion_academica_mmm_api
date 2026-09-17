@@ -11,7 +11,8 @@ interface AnuncioRepositoryInterface
 {
     public function paginate(int $perPage, ?int $iglesiaId = null): LengthAwarePaginator;
 
-    public function paginatePublicados(int $perPage, int $iglesiaId): LengthAwarePaginator;
+    /** @param  list<string>|null  $audiencias */
+    public function paginatePublicados(int $perPage, int $iglesiaId, ?array $audiencias = null): LengthAwarePaginator;
 
     public function create(array $data): Anuncio;
 

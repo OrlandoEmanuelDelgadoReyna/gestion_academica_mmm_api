@@ -34,7 +34,11 @@ final class AnuncioPolicy
         }
 
         if ($anuncio->isVigente() && $this->academicAccess->belongsToIglesia($user, (int) $anuncio->iglesia_id)) {
-            return Response::allow();
+            if ($this->academicAccess->canViewAnuncioAudiencia($user, $anuncio->audienciaEfectiva())) {
+                return Response::allow();
+            }
+
+            return Response::deny('Este anuncio no está dirigido a su audiencia.');
         }
 
         return Response::deny('No puede consultar este anuncio.');

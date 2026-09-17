@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Anuncio;
+use App\Models\Usuario;
 use App\Repositories\Contracts\AnuncioRepositoryInterface;
 use App\Repositories\Contracts\AuditoriaRepositoryInterface;
 use App\Repositories\Contracts\DatabaseTransactionRepositoryInterface;
@@ -27,9 +28,13 @@ final class AnuncioService
         return $this->anuncios->paginate($perPage, $iglesiaId);
     }
 
-    public function paginatePublicados(int $perPage, int $iglesiaId): LengthAwarePaginator
+    public function paginatePublicados(Usuario $user, int $perPage, int $iglesiaId): LengthAwarePaginator
     {
-        return $this->anuncios->paginatePublicados($perPage, $iglesiaId);
+        return $this->anuncios->paginatePublicados(
+            $perPage,
+            $iglesiaId,
+            $this->academicAccess->visibleAnuncioAudiencias($user),
+        );
     }
 
     public function create(array $data, int $actorId): Anuncio
@@ -60,6 +65,7 @@ final class AnuncioService
                 'titulo',
                 'contenido',
                 'estado',
+                'audiencia',
                 'publicado_at',
                 'vence_at',
             ]), $data), fillingPublishedNow: ! $wasPublished);
@@ -98,12 +104,18 @@ final class AnuncioService
 
     private function dispatchPublication(Anuncio $anuncio, int $actorId): void
     {
-        if ($this->notificaciones->existsForAnuncio((int) $anuncio->id)) {
+        $usuarioIds = $this->academicAccess->recipientUsuarioIdsForAudiencia(
+            (int) $anuncio->iglesia_id,
+            $anuncio->audienciaEfectiva(),
+        );
+        if ($usuarioIds === []) {
             return;
         }
 
-        $usuarioIds = $this->academicAccess->activeUsuarioIdsOfIglesia((int) $anuncio->iglesia_id);
-        if ($usuarioIds === []) {
+        $existing = $this->notificaciones->findByAnuncioId((int) $anuncio->id);
+        if ($existing !== null) {
+            $this->notificaciones->syncDestinatarios($existing, $usuarioIds);
+
             return;
         }
 

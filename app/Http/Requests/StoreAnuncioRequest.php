@@ -24,9 +24,17 @@ final class StoreAnuncioRequest extends FormRequest
             'titulo' => ['required', 'string', 'max:150'],
             'contenido' => ['required', 'string'],
             'estado' => ['required', 'string', Rule::in(Anuncio::ESTADOS)],
+            'audiencia' => ['required', 'string', Rule::in(Anuncio::AUDIENCIAS)],
             'publicado_at' => ['nullable', 'date'],
             'vence_at' => ['nullable', 'date'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (! $this->filled('audiencia')) {
+            $this->merge(['audiencia' => Anuncio::AUDIENCIA_TODOS]);
+        }
     }
 
     public function withValidator(Validator $validator): void

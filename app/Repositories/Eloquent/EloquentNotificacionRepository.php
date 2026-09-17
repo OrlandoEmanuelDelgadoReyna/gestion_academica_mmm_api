@@ -76,11 +76,23 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
         $now = now();
 
         foreach (array_unique($usuarioIds) as $usuarioId) {
-            NotificacionDestinatario::query()->updateOrCreate(
+            NotificacionDestinatario::query()->firstOrCreate(
                 ['notificacion_id' => $notificacion->id, 'usuario_id' => $usuarioId],
                 ['estado' => 'entregado', 'entregado_at' => $now, 'leido_at' => null],
             );
         }
+    }
+
+    public function deleteDestinatariosNotIn(Notificacion $notificacion, array $usuarioIds): void
+    {
+        $query = NotificacionDestinatario::query()->where('notificacion_id', $notificacion->id);
+        if ($usuarioIds === []) {
+            $query->delete();
+
+            return;
+        }
+
+        $query->whereNotIn('usuario_id', $usuarioIds)->delete();
     }
 
     public function markAsRead(Notificacion $notificacion, int $usuarioId): ?NotificacionDestinatario
@@ -99,9 +111,14 @@ final class EloquentNotificacionRepository implements NotificacionRepositoryInte
         return $destinatario->refresh();
     }
 
+    public function findByAnuncioId(int $anuncioId): ?Notificacion
+    {
+        return Notificacion::query()->where('anuncio_id', $anuncioId)->first();
+    }
+
     public function existsForAnuncio(int $anuncioId): bool
     {
-        return Notificacion::query()->where('anuncio_id', $anuncioId)->exists();
+        return $this->findByAnuncioId($anuncioId) !== null;
     }
 
     public function deleteGeneratedByAnuncio(int $anuncioId): void

@@ -130,6 +130,54 @@ final class NotificacionService
         return $this->notificaciones->existsForAnuncio($anuncioId);
     }
 
+    public function findByAnuncioId(int $anuncioId): ?Notificacion
+    {
+        return $this->notificaciones->findByAnuncioId($anuncioId);
+    }
+
+    /**
+     * Adds missing recipients without recreating the notification or resetting leido_at.
+     *
+     * @param  list<int>  $usuarioIds
+     */
+    public function ensureDestinatarios(Notificacion $notificacion, array $usuarioIds): void
+    {
+        $usuarioIds = $this->uniqueConstrainedUsuarioIds((int) $notificacion->iglesia_id, $usuarioIds);
+        if ($usuarioIds === []) {
+            return;
+        }
+
+        $this->notificaciones->createDestinatarios($notificacion, $usuarioIds);
+    }
+
+    /**
+     * Replaces the recipient set for an existing notification without duplicating it.
+     *
+     * @param  list<int>  $usuarioIds
+     */
+    public function syncDestinatarios(Notificacion $notificacion, array $usuarioIds): void
+    {
+        $usuarioIds = $this->uniqueConstrainedUsuarioIds((int) $notificacion->iglesia_id, $usuarioIds);
+        if ($usuarioIds === []) {
+            return;
+        }
+
+        $this->notificaciones->createDestinatarios($notificacion, $usuarioIds);
+        $this->notificaciones->deleteDestinatariosNotIn($notificacion, $usuarioIds);
+    }
+
+    /**
+     * @param  list<int>  $usuarioIds
+     * @return list<int>
+     */
+    private function uniqueConstrainedUsuarioIds(int $iglesiaId, array $usuarioIds): array
+    {
+        return array_values(array_unique($this->academicAccess->constrainUsuarioIdsToIglesia(
+            $iglesiaId,
+            $usuarioIds,
+        )));
+    }
+
     /**
      * Permanently deletes announcement notices the day after vence_at, at 00:00 America/Lima.
      *

@@ -21,6 +21,7 @@ final class UpdateAnuncioRequest extends FormRequest
             'titulo' => ['sometimes', 'string', 'max:150'],
             'contenido' => ['sometimes', 'string'],
             'estado' => ['sometimes', 'string', Rule::in(Anuncio::ESTADOS)],
+            'audiencia' => ['sometimes', 'string', Rule::in(Anuncio::AUDIENCIAS)],
             'publicado_at' => ['nullable', 'date'],
             'vence_at' => ['nullable', 'date'],
         ];

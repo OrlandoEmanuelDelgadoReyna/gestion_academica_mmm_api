@@ -24,9 +24,18 @@ class Anuncio extends Model
     /** @var list<string> */
     public const ESTADOS = [self::BORRADOR, self::PUBLICADO, self::ARCHIVADO];
 
+    public const AUDIENCIA_TODOS = 'todos';
+
+    public const AUDIENCIA_DOCENTES = 'docentes';
+
+    public const AUDIENCIA_ALUMNOS = 'alumnos';
+
+    /** @var list<string> */
+    public const AUDIENCIAS = [self::AUDIENCIA_TODOS, self::AUDIENCIA_DOCENTES, self::AUDIENCIA_ALUMNOS];
+
     protected $table = 'anuncios';
 
-    protected $fillable = ['iglesia_id', 'titulo', 'contenido', 'estado', 'publicado_at', 'vence_at', 'creado_por_usuario_id'];
+    protected $fillable = ['iglesia_id', 'titulo', 'contenido', 'estado', 'audiencia', 'publicado_at', 'vence_at', 'creado_por_usuario_id'];
 
     protected function casts(): array
     {
@@ -56,6 +65,15 @@ class Anuncio extends Model
     public function isPublicado(): bool
     {
         return $this->estado === self::PUBLICADO;
+    }
+
+    public function audienciaEfectiva(): string
+    {
+        $audiencia = (string) ($this->audiencia ?? '');
+
+        return in_array($audiencia, self::AUDIENCIAS, true)
+            ? $audiencia
+            : self::AUDIENCIA_TODOS;
     }
 
     public function isVigente(): bool

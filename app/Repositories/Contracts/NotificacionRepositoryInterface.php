@@ -28,7 +28,12 @@ interface NotificacionRepositoryInterface
     /** @param  list<int>  $usuarioIds */
     public function createDestinatarios(Notificacion $notificacion, array $usuarioIds): void;
 
+    /** @param  list<int>  $usuarioIds */
+    public function deleteDestinatariosNotIn(Notificacion $notificacion, array $usuarioIds): void;
+
     public function markAsRead(Notificacion $notificacion, int $usuarioId): ?NotificacionDestinatario;
+
+    public function findByAnuncioId(int $anuncioId): ?Notificacion;
 
     public function existsForAnuncio(int $anuncioId): bool;
 

@@ -20,6 +20,7 @@ final class AnuncioResource extends JsonResource
             'titulo' => $this->titulo,
             'contenido' => $this->contenido,
             'estado' => $this->estado,
+            'audiencia' => $this->audienciaEfectiva(),
             'publicado_at' => $this->publicado_at,
             'vence_at' => $this->vence_at,
             'vence_on' => AnuncioVigencia::limaDateString($this->vence_at),

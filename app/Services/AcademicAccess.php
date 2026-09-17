@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Anuncio;
 use App\Models\Asistencia;
 use App\Models\Certificado;
 use App\Models\Matricula;
@@ -59,6 +60,116 @@ final class AcademicAccess
         return Usuario::query()
             ->where('activo', true)
             ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * Audiencias de anuncio que el usuario puede ver en publicados.
+     * Null significa administrador global: todas las audiencias.
+     *
+     * @return list<string>|null
+     */
+    public function visibleAnuncioAudiencias(Usuario $user): ?array
+    {
+        if ($this->isGlobalAcademic($user)) {
+            return null;
+        }
+
+        if ($this->isDocente($user)) {
+            return [Anuncio::AUDIENCIA_TODOS, Anuncio::AUDIENCIA_DOCENTES];
+        }
+
+        if ($this->hasAnyActiveEnrollment($user)) {
+            return [Anuncio::AUDIENCIA_TODOS, Anuncio::AUDIENCIA_ALUMNOS];
+        }
+
+        return [Anuncio::AUDIENCIA_TODOS];
+    }
+
+    public function canViewAnuncioAudiencia(Usuario $user, ?string $audiencia): bool
+    {
+        $allowed = $this->visibleAnuncioAudiencias($user);
+        if ($allowed === null) {
+            return true;
+        }
+
+        $value = in_array((string) $audiencia, Anuncio::AUDIENCIAS, true)
+            ? (string) $audiencia
+            : Anuncio::AUDIENCIA_TODOS;
+
+        return in_array($value, $allowed, true);
+    }
+
+    /**
+     * Destinatarios de un anuncio según audiencia.
+     * El administrador global de la iglesia siempre se incluye, una sola vez.
+     *
+     * @return list<int>
+     */
+    public function recipientUsuarioIdsForAudiencia(int $iglesiaId, ?string $audiencia): array
+    {
+        $value = in_array((string) $audiencia, Anuncio::AUDIENCIAS, true)
+            ? (string) $audiencia
+            : Anuncio::AUDIENCIA_TODOS;
+
+        $ids = match ($value) {
+            Anuncio::AUDIENCIA_DOCENTES => $this->activeDocenteUsuarioIdsOfIglesia($iglesiaId),
+            Anuncio::AUDIENCIA_ALUMNOS => $this->activeAlumnoUsuarioIdsOfIglesia($iglesiaId),
+            default => $this->activeUsuarioIdsOfIglesia($iglesiaId),
+        };
+
+        return array_values(array_unique(array_merge(
+            $ids,
+            $this->activeAdministratorUsuarioIdsOfIglesia($iglesiaId),
+        )));
+    }
+
+    /** @return list<int> */
+    public function activeDocenteUsuarioIdsOfIglesia(int $iglesiaId): array
+    {
+        return Usuario::query()
+            ->where('activo', true)
+            ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->whereHas('roles', fn ($query) => $query->where('codigo', 'DOCENTE'))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+    }
+
+    /**
+     * Alumno = usuario activo de la iglesia con matrícula activa,
+     * sin rol DOCENTE ni permiso academico.gestionar.
+     *
+     * @return list<int>
+     */
+    public function activeAlumnoUsuarioIdsOfIglesia(int $iglesiaId): array
+    {
+        return Usuario::query()
+            ->where('activo', true)
+            ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->whereIn('miembro_id', Matricula::query()->select('miembro_id')->where('estado', 'activa'))
+            ->whereDoesntHave('roles', fn ($query) => $query->where('codigo', 'DOCENTE'))
+            ->whereDoesntHave(
+                'roles.permisos',
+                fn ($query) => $query->where('codigo', 'academico.gestionar')->where('activo', true),
+            )
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+    }
+
+    /** @return list<int> */
+    public function activeAdministratorUsuarioIdsOfIglesia(int $iglesiaId): array
+    {
+        return Usuario::query()
+            ->where('activo', true)
+            ->whereHas('miembro', fn ($query) => $query->where('iglesia_id', $iglesiaId))
+            ->whereHas(
+                'roles.permisos',
+                fn ($query) => $query->where('codigo', 'academico.gestionar')->where('activo', true),
+            )
             ->orderBy('id')
             ->pluck('id')
             ->all();

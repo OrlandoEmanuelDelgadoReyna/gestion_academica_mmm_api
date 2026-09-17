@@ -73,6 +73,8 @@ final class ComunicacionApiTest extends TestCase
         $admin = $this->actingAsAdmin();
         $alumno = $this->createAlumnoUser('alumno.anun.ok');
         $docente = $this->createDocenteUser('docente.anun.ok');
+        $inactivo = $this->createAlumnoUser('alumno.anun.inactivo');
+        $inactivo->update(['activo' => false]);
         $ajeno = $this->createUserInOtherChurch('alumno.otra.iglesia');
 
         Sanctum::actingAs($admin);
@@ -102,6 +104,8 @@ final class ComunicacionApiTest extends TestCase
         $this->assertTrue($destinatarios->contains($alumno->id));
         $this->assertTrue($destinatarios->contains($docente->id));
         $this->assertFalse($destinatarios->contains($ajeno->id));
+        $this->assertFalse($destinatarios->contains($inactivo->id));
+        $this->assertSame(3, $destinatarios->unique()->count());
     }
 
     public function test_publishing_twice_does_not_duplicate_notifications(): void
@@ -115,6 +119,7 @@ final class ComunicacionApiTest extends TestCase
             ->json('data.id');
 
         $this->assertSame(1, Notificacion::query()->where('tipo', 'anuncio')->count());
+        $destinatariosAntes = NotificacionDestinatario::query()->count();
 
         $this->putJson("/api/v1/anuncios/{$id}", [
             'titulo' => 'Sigue publicado',
@@ -122,6 +127,229 @@ final class ComunicacionApiTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, Notificacion::query()->where('tipo', 'anuncio')->count());
+        $this->assertSame($destinatariosAntes, NotificacionDestinatario::query()->count());
+        $this->assertSame(
+            $destinatariosAntes,
+            NotificacionDestinatario::query()->distinct()->count('usuario_id'),
+        );
+    }
+
+    public function test_updating_published_anuncio_adds_missing_destinatarios_without_new_notification(): void
+    {
+        $admin = $this->actingAsAdmin();
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+
+        $notificacion = Notificacion::query()->where('anuncio_id', $id)->firstOrFail();
+        $this->assertDatabaseHas('notificacion_destinatarios', [
+            'notificacion_id' => $notificacion->id,
+            'usuario_id' => $admin->id,
+        ]);
+
+        $alumno = $this->createAlumnoUser('alumno.anun.backfill');
+        $docente = $this->createDocenteUser('docente.anun.backfill');
+
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/anuncios/{$id}", [
+            'titulo' => 'Sigue publicado',
+            'estado' => 'publicado',
+        ])->assertOk();
+
+        $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
+        $this->assertSame($notificacion->id, (int) Notificacion::query()->where('anuncio_id', $id)->value('id'));
+
+        $destinatarios = NotificacionDestinatario::query()
+            ->where('notificacion_id', $notificacion->id)
+            ->pluck('usuario_id');
+        $this->assertTrue($destinatarios->contains($admin->id));
+        $this->assertTrue($destinatarios->contains($alumno->id));
+        $this->assertTrue($destinatarios->contains($docente->id));
+        $this->assertSame(3, $destinatarios->unique()->count());
+    }
+
+    public function test_docente_and_alumno_receive_published_anuncio_in_inbox(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $alumno = $this->createAlumnoUser('alumno.anun.inbox');
+        $docente = $this->createDocenteUser('docente.anun.inbox');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+        $notificacionId = (int) Notificacion::query()->where('anuncio_id', $id)->value('id');
+
+        Sanctum::actingAs($docente);
+        $docenteInbox = collect($this->getJson('/api/v1/notificaciones/mis')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($docenteInbox->contains($notificacionId));
+
+        Sanctum::actingAs($alumno);
+        $alumnoInbox = collect($this->getJson('/api/v1/notificaciones/mis')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($alumnoInbox->contains($notificacionId));
+    }
+
+    public function test_anuncio_audiencia_todos_docentes_and_alumnos_are_created(): void
+    {
+        $admin = $this->actingAsAdmin();
+        Sanctum::actingAs($admin);
+
+        foreach (['todos', 'docentes', 'alumnos'] as $audiencia) {
+            $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+                $this->anuncioPayload('publicado'),
+                ['titulo' => 'Aviso '.$audiencia, 'audiencia' => $audiencia],
+            ))->assertCreated()->json('data.id');
+
+            $this->assertDatabaseHas('anuncios', ['id' => $id, 'audiencia' => $audiencia]);
+            $this->assertSame($audiencia, $this->getJson("/api/v1/anuncios/{$id}")->assertOk()->json('data.audiencia'));
+        }
+    }
+
+    public function test_anuncio_audiencia_todos_notifies_admin_docente_and_alumno(): void
+    {
+        [$admin, $docente, $alumno] = $this->seedAudienciaActors('todos');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['audiencia' => 'todos'],
+        ))->assertCreated()->json('data.id');
+
+        $this->assertAudienciaRecipients($id, included: [$admin, $docente, $alumno]);
+    }
+
+    public function test_anuncio_audiencia_docentes_notifies_admin_and_docente_not_alumno(): void
+    {
+        [$admin, $docente, $alumno] = $this->seedAudienciaActors('doc');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['audiencia' => 'docentes'],
+        ))->assertCreated()->json('data.id');
+
+        $this->assertAudienciaRecipients($id, included: [$admin, $docente], excluded: [$alumno]);
+    }
+
+    public function test_anuncio_audiencia_alumnos_notifies_admin_and_alumno_not_docente(): void
+    {
+        [$admin, $docente, $alumno] = $this->seedAudienciaActors('alu');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['audiencia' => 'alumnos'],
+        ))->assertCreated()->json('data.id');
+
+        $this->assertAudienciaRecipients($id, included: [$admin, $alumno], excluded: [$docente]);
+    }
+
+    public function test_anuncio_audiencia_does_not_duplicate_destinatario_for_multi_role_user(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $docente = $this->createDocenteUser('docente.anun.dual');
+        $programacion = $this->createProgramacion('AUD-DUAL');
+        $this->enrollAlumno($docente, $programacion);
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['audiencia' => 'todos'],
+        ))->assertCreated()->json('data.id');
+
+        $notificacionId = (int) Notificacion::query()->where('anuncio_id', $id)->value('id');
+        $this->assertSame(1, NotificacionDestinatario::query()
+            ->where('notificacion_id', $notificacionId)
+            ->where('usuario_id', $docente->id)
+            ->count());
+        $this->assertSame(1, NotificacionDestinatario::query()
+            ->where('notificacion_id', $notificacionId)
+            ->where('usuario_id', $admin->id)
+            ->count());
+    }
+
+    public function test_publicados_respects_audiencia_for_docente_alumno_and_admin(): void
+    {
+        [$admin, $docente, $alumno] = $this->seedAudienciaActors('pub');
+
+        Sanctum::actingAs($admin);
+        $todosId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Para todos', 'audiencia' => 'todos'],
+        ))->assertCreated()->json('data.id');
+        $docentesId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Para docentes', 'audiencia' => 'docentes'],
+        ))->assertCreated()->json('data.id');
+        $alumnosId = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['titulo' => 'Para alumnos', 'audiencia' => 'alumnos'],
+        ))->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($admin);
+        $adminIds = collect($this->getJson('/api/v1/anuncios')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($adminIds->contains($todosId));
+        $this->assertTrue($adminIds->contains($docentesId));
+        $this->assertTrue($adminIds->contains($alumnosId));
+
+        Sanctum::actingAs($docente);
+        $docenteIds = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($docenteIds->contains($todosId));
+        $this->assertTrue($docenteIds->contains($docentesId));
+        $this->assertFalse($docenteIds->contains($alumnosId));
+
+        Sanctum::actingAs($alumno);
+        $alumnoIds = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($alumnoIds->contains($todosId));
+        $this->assertTrue($alumnoIds->contains($alumnosId));
+        $this->assertFalse($alumnoIds->contains($docentesId));
+    }
+
+    public function test_legacy_anuncio_without_audiencia_behaves_as_todos(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $docente = $this->createDocenteUser('docente.anun.legacy.aud');
+        $alumno = $this->createAlumnoUser('alumno.anun.legacy.aud');
+        $this->enrollAlumno($alumno, $this->createProgramacion('AUD-LEG'));
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', $this->anuncioPayload('publicado'))
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertDatabaseHas('anuncios', ['id' => $id, 'audiencia' => 'todos']);
+        $this->assertSame('todos', $this->getJson("/api/v1/anuncios/{$id}")->assertOk()->json('data.audiencia'));
+        $this->assertAudienciaRecipients($id, included: [$admin, $docente, $alumno]);
+
+        Sanctum::actingAs($docente);
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
+
+        Sanctum::actingAs($alumno);
+        $ids = collect($this->getJson('/api/v1/anuncios/publicados')->assertOk()->json('data'))->pluck('id');
+        $this->assertTrue($ids->contains($id));
+    }
+
+    public function test_changing_published_audiencia_reconciles_destinatarios(): void
+    {
+        [$admin, $docente, $alumno] = $this->seedAudienciaActors('rec');
+
+        Sanctum::actingAs($admin);
+        $id = (int) $this->postJson('/api/v1/anuncios', array_merge(
+            $this->anuncioPayload('publicado'),
+            ['audiencia' => 'docentes'],
+        ))->assertCreated()->json('data.id');
+        $notificacionId = (int) Notificacion::query()->where('anuncio_id', $id)->value('id');
+
+        $this->assertAudienciaRecipients($id, included: [$admin, $docente], excluded: [$alumno]);
+
+        $this->putJson("/api/v1/anuncios/{$id}", ['audiencia' => 'alumnos'])->assertOk();
+
+        $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
+        $this->assertSame($notificacionId, (int) Notificacion::query()->where('anuncio_id', $id)->value('id'));
+        $this->assertAudienciaRecipients($id, included: [$admin, $alumno], excluded: [$docente]);
     }
 
     public function test_updating_published_anuncio_recreates_missing_notification_once(): void
@@ -822,6 +1050,39 @@ final class ComunicacionApiTest extends TestCase
         $message = $this->getJson('/api/v1/anuncios')->assertForbidden()->json('message');
         $this->assertIsString($message);
         $this->assertStringNotContainsString('This action is unauthorized.', $message);
+    }
+
+    /** @return array{0: Usuario, 1: Usuario, 2: Usuario} */
+    private function seedAudienciaActors(string $suffix): array
+    {
+        $admin = $this->actingAsAdmin();
+        $docente = $this->createDocenteUser('docente.aud.'.$suffix);
+        $alumno = $this->createAlumnoUser('alumno.aud.'.$suffix);
+        $this->enrollAlumno($alumno, $this->createProgramacion('AUD-'.$suffix));
+
+        return [$admin, $docente, $alumno];
+    }
+
+    /**
+     * @param  list<Usuario>  $included
+     * @param  list<Usuario>  $excluded
+     */
+    private function assertAudienciaRecipients(int $anuncioId, array $included, array $excluded = []): void
+    {
+        $notificacionId = (int) Notificacion::query()->where('anuncio_id', $anuncioId)->value('id');
+        $this->assertNotSame(0, $notificacionId);
+        foreach ($included as $usuario) {
+            $this->assertDatabaseHas('notificacion_destinatarios', [
+                'notificacion_id' => $notificacionId,
+                'usuario_id' => $usuario->id,
+            ]);
+        }
+        foreach ($excluded as $usuario) {
+            $this->assertDatabaseMissing('notificacion_destinatarios', [
+                'notificacion_id' => $notificacionId,
+                'usuario_id' => $usuario->id,
+            ]);
+        }
     }
 
     /** @param  list<int>  $usuarioIds */

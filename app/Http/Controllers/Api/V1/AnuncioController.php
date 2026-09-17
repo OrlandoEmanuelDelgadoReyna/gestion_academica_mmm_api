@@ -49,7 +49,7 @@ final class AnuncioController extends Controller
         $iglesiaId = $this->requireIglesiaId($user);
 
         return AnuncioResource::collection(
-            $this->service->paginatePublicados((int) $request->integer('per_page', 15), $iglesiaId),
+            $this->service->paginatePublicados($user, (int) $request->integer('per_page', 15), $iglesiaId),
         );
     }
 

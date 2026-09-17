@@ -19,12 +19,20 @@ final class EloquentAnuncioRepository implements AnuncioRepositoryInterface
             ->paginate($perPage);
     }
 
-    public function paginatePublicados(int $perPage, int $iglesiaId): LengthAwarePaginator
+    public function paginatePublicados(int $perPage, int $iglesiaId, ?array $audiencias = null): LengthAwarePaginator
     {
         return Anuncio::query()
             ->with(['iglesia', 'creadoPor'])
             ->where('iglesia_id', $iglesiaId)
             ->vigente()
+            ->when($audiencias !== null, function ($query) use ($audiencias): void {
+                $query->where(function ($inner) use ($audiencias): void {
+                    $inner->whereIn('audiencia', $audiencias);
+                    if (in_array(Anuncio::AUDIENCIA_TODOS, $audiencias, true)) {
+                        $inner->orWhereNull('audiencia');
+                    }
+                });
+            })
             ->orderByDesc('publicado_at')
             ->paginate($perPage);
     }
