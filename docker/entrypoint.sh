@@ -11,10 +11,14 @@ mkdir -p storage/framework/cache/data \
          storage/framework/sessions \
          storage/framework/views \
          storage/logs \
+         storage/app/public \
          bootstrap/cache
 
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
+
+# Public covers (cursos/portadas) are served from /storage via this symlink.
+php artisan storage:link --force --no-ansi || true
 
 # Install dependencies if vendor is missing (e.g. local bind mounts)
 if [ ! -f vendor/autoload.php ]; then

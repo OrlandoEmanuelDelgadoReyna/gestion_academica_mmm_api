@@ -26,18 +26,22 @@ final class CursoController extends Controller
 
     public function store(StoreCursoRequest $request): CursoResource
     {
-        return new CursoResource($this->service->create($request->validated(), $request->user()->id));
+        $data = $request->safe()->except('portada');
+
+        return new CursoResource($this->service->create($data, $request->user()->id, $request->file('portada')));
     }
 
     public function show(Curso $curso): CursoResource
     {
         $this->authorize('view', $curso);
 
-        return new CursoResource($curso->load('iglesia'));
+        return new CursoResource($curso->load('iglesia')->loadCount(['programaciones', 'matriculas']));
     }
 
     public function update(UpdateCursoRequest $request, Curso $curso): CursoResource
     {
-        return new CursoResource($this->service->update($curso, $request->validated(), $request->user()->id));
+        $data = $request->safe()->except('portada');
+
+        return new CursoResource($this->service->update($curso, $data, $request->user()->id, $request->file('portada')));
     }
 }

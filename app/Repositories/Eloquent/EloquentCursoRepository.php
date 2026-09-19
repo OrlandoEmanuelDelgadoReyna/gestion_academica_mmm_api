@@ -12,18 +12,27 @@ final class EloquentCursoRepository implements CursoRepositoryInterface
 {
     public function paginate(int $perPage): LengthAwarePaginator
     {
-        return Curso::query()->with('iglesia')->orderBy('nombre')->paginate($perPage);
+        return Curso::query()
+            ->with('iglesia')
+            ->withCount(['programaciones', 'matriculas'])
+            ->orderBy('nombre')
+            ->paginate($perPage);
     }
 
     public function create(array $data): Curso
     {
-        return Curso::query()->create($data);
+        return $this->withCatalogData(Curso::query()->create($data));
     }
 
     public function update(Curso $curso, array $data): Curso
     {
         $curso->update($data);
 
-        return $curso->refresh();
+        return $this->withCatalogData($curso->refresh());
+    }
+
+    private function withCatalogData(Curso $curso): Curso
+    {
+        return $curso->load('iglesia')->loadCount(['programaciones', 'matriculas']);
     }
 }

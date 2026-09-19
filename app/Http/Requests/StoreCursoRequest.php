@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Curso;
+use App\Support\CursoPortadaStorage;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,6 +24,7 @@ final class StoreCursoRequest extends FormRequest
             'nombre' => ['required', 'string', 'max:150'],
             'descripcion' => ['nullable', 'string'],
             'activo' => ['sometimes', 'boolean'],
+            'portada' => ['nullable', 'file', CursoPortadaStorage::mimesRule(), 'max:'.CursoPortadaStorage::MAX_KILOBYTES],
         ];
     }
 }

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 /** Reusable curricular definition for biblical education. */
 class Curso extends Model
@@ -17,7 +18,7 @@ class Curso extends Model
 
     protected $table = 'cursos';
 
-    protected $fillable = ['iglesia_id', 'codigo', 'nombre', 'descripcion', 'activo'];
+    protected $fillable = ['iglesia_id', 'codigo', 'nombre', 'descripcion', 'portada_path', 'activo'];
 
     protected function casts(): array
     {
@@ -32,6 +33,16 @@ class Curso extends Model
     public function programaciones(): HasMany
     {
         return $this->hasMany(ProgramacionAcademica::class);
+    }
+
+    public function matriculas(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Matricula::class,
+            ProgramacionAcademica::class,
+            'curso_id',
+            'programacion_academica_id',
+        );
     }
 
     public function lecciones(): HasMany
