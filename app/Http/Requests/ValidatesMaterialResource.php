@@ -11,22 +11,36 @@ use Illuminate\Validation\Validator;
 
 trait ValidatesMaterialResource
 {
-    protected function resolvedTipoCodigo(): ?string
+    protected function prepareForValidation(): void
     {
-        $tipoId = $this->input('tipo_material_id');
-        if (is_numeric($tipoId)) {
-            $codigo = TipoMaterial::query()->whereKey((int) $tipoId)->value('codigo');
-
-            return is_string($codigo) ? $codigo : null;
+        $codigo = $this->input('tipo_codigo');
+        if (! is_string($codigo)) {
+            return;
         }
 
+        $normalized = strtoupper(trim($codigo));
+        $this->merge(['tipo_codigo' => $normalized === '' ? null : $normalized]);
+    }
+
+    protected function resolvedTipoCodigo(): ?string
+    {
         $material = $this->route('material');
         if ($material instanceof Material) {
             if (! $material->relationLoaded('tipoMaterial')) {
                 $material->load('tipoMaterial');
             }
 
-            return $material->tipoMaterial?->codigo;
+            $codigo = $material->tipoMaterial?->codigo;
+            if (is_string($codigo) && $codigo !== '') {
+                return $codigo;
+            }
+        }
+
+        $tipoId = $this->input('tipo_material_id');
+        if (is_numeric($tipoId)) {
+            $codigo = TipoMaterial::query()->whereKey((int) $tipoId)->value('codigo');
+
+            return is_string($codigo) ? $codigo : null;
         }
 
         return null;
@@ -63,6 +77,8 @@ trait ValidatesMaterialResource
 
     protected function afterValidatingMaterialResource(Validator $validator): void
     {
+        $this->assertTipoMatchesCategoryContext($validator);
+
         $codigo = $this->resolvedTipoCodigo();
         $hasFile = $this->hasFile('archivo');
         $ruta = trim((string) $this->input('ruta_recurso', ''));
@@ -106,6 +122,52 @@ trait ValidatesMaterialResource
             if (! $isUpdate && ! $hasFile && ! $hasRuta) {
                 $validator->errors()->add('ruta_recurso', 'Debe adjuntar un archivo o indicar una URL http o https.');
             }
+        }
+    }
+
+    protected function assertTipoMatchesCategoryContext(Validator $validator): void
+    {
+        $requested = strtoupper(trim((string) $this->input('tipo_codigo', '')));
+        $material = $this->route('material');
+        $isUpdate = $material instanceof Material;
+
+        if ($isUpdate) {
+            if (! $material->relationLoaded('tipoMaterial')) {
+                $material->load('tipoMaterial');
+            }
+
+            $currentId = (int) $material->tipo_material_id;
+            $currentCodigo = strtoupper((string) $material->tipoMaterial?->codigo);
+
+            if ($this->exists('tipo_material_id') && is_numeric($this->input('tipo_material_id'))) {
+                $incomingId = (int) $this->input('tipo_material_id');
+                if ($incomingId !== $currentId) {
+                    $validator->errors()->add(
+                        'tipo_material_id',
+                        'No se puede cambiar el tipo de material.',
+                    );
+                }
+            }
+
+            if ($requested !== '' && $requested !== $currentCodigo) {
+                $validator->errors()->add(
+                    'tipo_codigo',
+                    'El tipo de material no coincide con la categoría actual.',
+                );
+            }
+
+            return;
+        }
+
+        if ($requested === '') {
+            return;
+        }
+
+        $resolved = strtoupper((string) ($this->resolvedTipoCodigo() ?? ''));
+        if ($resolved === '' || $requested !== $resolved) {
+            $message = 'El tipo de material no coincide con la categoría actual.';
+            $validator->errors()->add('tipo_codigo', $message);
+            $validator->errors()->add('tipo_material_id', $message);
         }
     }
 }

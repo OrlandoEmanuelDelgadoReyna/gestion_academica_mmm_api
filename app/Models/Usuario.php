@@ -19,7 +19,7 @@ final class Usuario extends Authenticatable
 
     protected $table = 'usuarios';
 
-    protected $fillable = ['miembro_id', 'nombre_usuario', 'contrasena', 'activo', 'ultimo_acceso_at'];
+    protected $fillable = ['miembro_id', 'nombre_usuario', 'contrasena', 'activo', 'profile_photo_path', 'ultimo_acceso_at'];
 
     protected $hidden = ['contrasena'];
 

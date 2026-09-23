@@ -21,6 +21,7 @@ final class UpdateMaterialRequest extends FormRequest
     {
         return [
             'tipo_material_id' => ['sometimes', 'integer', Rule::exists('tipos_material', 'id')->where('activo', true)],
+            'tipo_codigo' => ['sometimes', 'nullable', 'string', 'max:50', Rule::in(['DOCUMENTO', 'VIDEO', 'ENLACE'])],
             'titulo' => ['sometimes', 'string', 'max:150'],
             'descripcion' => ['nullable', 'string'],
             'archivo' => $this->archivoRules(),

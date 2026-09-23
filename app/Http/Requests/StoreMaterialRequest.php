@@ -39,6 +39,7 @@ final class StoreMaterialRequest extends FormRequest
         return [
             'programacion_academica_id' => ['required', 'integer', 'exists:programaciones_academicas,id'],
             'tipo_material_id' => ['required', 'integer', Rule::exists('tipos_material', 'id')->where('activo', true)],
+            'tipo_codigo' => ['sometimes', 'nullable', 'string', 'max:50', Rule::in(['DOCUMENTO', 'VIDEO', 'ENLACE'])],
             'titulo' => ['required', 'string', 'max:150'],
             'descripcion' => ['nullable', 'string'],
             'archivo' => $this->archivoRules(),

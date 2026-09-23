@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Usuario;
+use App\Support\UsuarioProfilePhotoStorage;
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /** Issues and revokes Sanctum personal-access tokens. */
 final class AutenticacionService
@@ -34,7 +37,36 @@ final class AutenticacionService
     {
         if (! Hash::check($current, $usuario->contrasena)) {
             throw ValidationException::withMessages(['contrasena_actual' => 'La contraseña actual no es válida.']);
-        } $usuario->forceFill(['contrasena' => $new])->save();
+        }
+        $usuario->forceFill(['contrasena' => $new])->save();
         $usuario->tokens()->delete();
+    }
+
+    public function updateProfilePhoto(Usuario $usuario, UploadedFile $archivo): Usuario
+    {
+        $previousPath = $usuario->profile_photo_path;
+        $storedPath = UsuarioProfilePhotoStorage::storeUpload($archivo);
+
+        try {
+            $usuario->forceFill(['profile_photo_path' => $storedPath])->save();
+        } catch (Throwable $exception) {
+            UsuarioProfilePhotoStorage::deleteManaged($storedPath);
+            throw $exception;
+        }
+
+        if ($previousPath !== $storedPath) {
+            UsuarioProfilePhotoStorage::deleteManaged($previousPath);
+        }
+
+        return $usuario->fresh(['miembro', 'roles']) ?? $usuario;
+    }
+
+    public function deleteProfilePhoto(Usuario $usuario): Usuario
+    {
+        $previousPath = $usuario->profile_photo_path;
+        $usuario->forceFill(['profile_photo_path' => null])->save();
+        UsuarioProfilePhotoStorage::deleteManaged($previousPath);
+
+        return $usuario->fresh(['miembro', 'roles']) ?? $usuario;
     }
 }

@@ -390,6 +390,133 @@ final class MaterialFileApiTest extends TestCase
         $this->assertCount(1, Storage::disk('local')->allFiles('materiales'));
     }
 
+    public function test_create_from_documentos_context_rejects_video_tipo(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-CTX-D');
+
+        $this->postJson('/api/v1/materiales', [
+            'programacion_academica_id' => $programacion->id,
+            'tipo_material_id' => $this->tipoMaterialId('VIDEO'),
+            'tipo_codigo' => 'DOCUMENTO',
+            'titulo' => 'No debe ser video',
+            'ruta_recurso' => 'https://ejemplo.test/video',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_codigo', 'tipo_material_id']);
+
+        $this->assertDatabaseMissing('materiales', [
+            'titulo' => 'No debe ser video',
+        ]);
+    }
+
+    public function test_create_from_videos_context_rejects_documento_tipo(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-CTX-V');
+
+        $this->post('/api/v1/materiales', [
+            'programacion_academica_id' => $programacion->id,
+            'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
+            'tipo_codigo' => 'VIDEO',
+            'titulo' => 'No debe ser documento',
+            'archivo' => UploadedFile::fake()->create('guia.pdf', 40, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_codigo', 'tipo_material_id']);
+    }
+
+    public function test_create_from_enlaces_context_rejects_documento_tipo(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-CTX-E');
+
+        $this->postJson('/api/v1/materiales', [
+            'programacion_academica_id' => $programacion->id,
+            'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
+            'tipo_codigo' => 'ENLACE',
+            'titulo' => 'No debe ser documento',
+            'ruta_recurso' => 'https://ejemplo.test/guia.pdf',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_codigo', 'tipo_material_id']);
+    }
+
+    public function test_create_from_documentos_context_accepts_matching_documento(): void
+    {
+        $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-CTX-OK');
+
+        $this->post('/api/v1/materiales', [
+            'programacion_academica_id' => $programacion->id,
+            'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
+            'tipo_codigo' => 'DOCUMENTO',
+            'titulo' => 'Guía contextual',
+            'archivo' => UploadedFile::fake()->create('guia.pdf', 50, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('data.tipo_material.codigo', 'DOCUMENTO');
+    }
+
+    public function test_update_cannot_convert_documento_into_video(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-UP-V');
+        $material = $this->createUrlMaterial($programacion, (int) $admin->id);
+
+        $this->putJson("/api/v1/materiales/{$material->id}", [
+            'tipo_material_id' => $this->tipoMaterialId('VIDEO'),
+            'tipo_codigo' => 'VIDEO',
+            'titulo' => 'Intentar video',
+            'ruta_recurso' => 'https://ejemplo.test/video',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_material_id']);
+
+        $this->assertSame(
+            $this->tipoMaterialId('DOCUMENTO'),
+            (int) Material::query()->findOrFail($material->id)->tipo_material_id,
+        );
+    }
+
+    public function test_update_cannot_convert_video_into_documento(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-UP-D');
+        $material = $this->createUrlMaterial($programacion, (int) $admin->id, [
+            'tipo_material_id' => $this->tipoMaterialId('VIDEO'),
+            'ruta_recurso' => 'https://ejemplo.test/clase',
+        ]);
+
+        $this->putJson("/api/v1/materiales/{$material->id}", [
+            'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
+            'tipo_codigo' => 'DOCUMENTO',
+            'titulo' => 'Intentar documento',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_material_id']);
+
+        $this->assertSame(
+            $this->tipoMaterialId('VIDEO'),
+            (int) Material::query()->findOrFail($material->id)->tipo_material_id,
+        );
+    }
+
+    public function test_update_cannot_convert_enlace_into_documento(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $programacion = $this->createProgramacion('MAT-UP-E');
+        $material = $this->createUrlMaterial($programacion, (int) $admin->id, [
+            'tipo_material_id' => $this->tipoMaterialId('ENLACE'),
+            'ruta_recurso' => 'https://ejemplo.test/recurso',
+        ]);
+
+        $this->putJson("/api/v1/materiales/{$material->id}", [
+            'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
+            'tipo_codigo' => 'DOCUMENTO',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['tipo_material_id']);
+
+        $this->assertSame(
+            $this->tipoMaterialId('ENLACE'),
+            (int) Material::query()->findOrFail($material->id)->tipo_material_id,
+        );
+    }
+
     private function storeDocumentoFile(ProgramacionAcademica $programacion, string $filename): int
     {
         return (int) $this->post('/api/v1/materiales', [
@@ -400,9 +527,9 @@ final class MaterialFileApiTest extends TestCase
         ], ['Accept' => 'application/json'])->assertCreated()->json('data.id');
     }
 
-    private function createUrlMaterial(ProgramacionAcademica $programacion, int $actorId): Material
+    private function createUrlMaterial(ProgramacionAcademica $programacion, int $actorId, array $overrides = []): Material
     {
-        return Material::query()->create([
+        return Material::query()->create(array_merge([
             'programacion_academica_id' => $programacion->id,
             'tipo_material_id' => $this->tipoMaterialId('DOCUMENTO'),
             'titulo' => 'Guía de estudio',
@@ -410,7 +537,7 @@ final class MaterialFileApiTest extends TestCase
             'ruta_recurso' => 'https://ejemplo.test/guia.pdf',
             'publicado_at' => '2026-08-01 10:00:00',
             'creado_por_usuario_id' => $actorId,
-        ]);
+        ], $overrides));
     }
 
     private function createProgramacion(string $codigo, string $grupo = 'A', string $periodo = '2026-II'): ProgramacionAcademica

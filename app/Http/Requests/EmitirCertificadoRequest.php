@@ -5,13 +5,29 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Models\Certificado;
+use App\Models\ProgramacionAcademica;
+use App\Services\AcademicAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class EmitirCertificadoRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('emitir', Certificado::class) ?? false;
+        if (! ($this->user()?->can('emitir', Certificado::class) ?? false)) {
+            return false;
+        }
+
+        $programacionId = (int) $this->input('programacion_academica_id');
+        if ($programacionId < 1) {
+            return true;
+        }
+
+        $programacion = ProgramacionAcademica::query()->find($programacionId);
+        if ($programacion === null) {
+            return true;
+        }
+
+        return app(AcademicAccess::class)->teachesProgramacion($this->user(), $programacion);
     }
 
     public function rules(): array

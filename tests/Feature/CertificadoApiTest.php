@@ -81,6 +81,32 @@ final class CertificadoApiTest extends TestCase
         $this->assertStringContainsString($codigo, app(CertificadoPdfGenerator::class)->verifyUrl($codigo));
     }
 
+    public function test_eligibility_and_emission_are_scoped_to_the_programacion(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $grupoA = $this->makeCertificableContext($admin, 'alumno.ctx.a', 'CERT-CTX-A');
+        $grupoB = $this->createProgramacion('CERT-CTX-B');
+
+        $this->getJson('/api/v1/certificados/elegibilidad?'.http_build_query([
+            'miembro_id' => $grupoA['alumno']->miembro_id,
+            'programacion_academica_id' => $grupoB->id,
+            'tipo_certificado_id' => $this->tipoId(TipoCertificado::CODIGO_ACADEMICO),
+        ]))
+            ->assertOk()
+            ->assertJsonPath('data.elegible', false)
+            ->assertJsonPath('data.matricula_encontrada', false);
+
+        $this->postJson('/api/v1/certificados/emitir', [
+            'miembro_id' => $grupoA['alumno']->miembro_id,
+            'tipo_certificado_id' => $this->tipoId(TipoCertificado::CODIGO_ACADEMICO),
+            'programacion_academica_id' => $grupoB->id,
+        ])->assertUnprocessable();
+
+        $this->emitAsAdmin($admin, $grupoA)
+            ->assertCreated()
+            ->assertJsonPath('data.programacion_academica_id', $grupoA['programacion']->id);
+    }
+
     public function test_docente_can_list_certificates_of_assigned_programacion_only(): void
     {
         $admin = $this->actingAsAdmin();

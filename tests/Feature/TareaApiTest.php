@@ -280,6 +280,32 @@ final class TareaApiTest extends TestCase
             ->assertJsonPath('data.titulo', 'Tarea actualizada');
     }
 
+    public function test_created_tarea_belongs_only_to_its_programacion(): void
+    {
+        $this->actingAsAdmin();
+        $grupoA = $this->createProgramacion('TAR-CTX-A');
+        $grupoB = $this->createProgramacion('TAR-CTX-B');
+
+        $id = (int) $this->postJson('/api/v1/tareas', $this->tareaPayload($grupoA))
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertDatabaseHas('tareas', [
+            'id' => $id,
+            'programacion_academica_id' => $grupoA->id,
+        ]);
+
+        $idsB = collect($this->getJson("/api/v1/tareas?programacion_academica_id={$grupoB->id}")
+            ->assertOk()
+            ->json('data'))->pluck('id');
+
+        $this->assertFalse($idsB->contains($id));
+        $this->assertDatabaseMissing('tareas', [
+            'id' => $id,
+            'programacion_academica_id' => $grupoB->id,
+        ]);
+    }
+
     public function test_admin_cannot_store_entrega_for_foreign_matricula(): void
     {
         $admin = $this->actingAsAdmin();

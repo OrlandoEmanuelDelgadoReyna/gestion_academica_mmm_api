@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests;
 
+use App\Models\ProgramacionAcademica;
 use App\Models\Tarea;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -11,7 +12,21 @@ final class StoreTareaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('create', Tarea::class) ?? false;
+        if (! ($this->user()?->can('create', Tarea::class) ?? false)) {
+            return false;
+        }
+
+        $programacionId = (int) $this->input('programacion_academica_id');
+        if ($programacionId < 1) {
+            return true;
+        }
+
+        $programacion = ProgramacionAcademica::query()->find($programacionId);
+        if ($programacion === null) {
+            return true;
+        }
+
+        return $this->user()?->can('view', $programacion) ?? false;
     }
 
     public function rules(): array

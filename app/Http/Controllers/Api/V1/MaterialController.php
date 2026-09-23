@@ -60,7 +60,7 @@ final class MaterialController extends Controller
 
     public function store(StoreMaterialRequest $request): MaterialResource
     {
-        $data = $request->safe()->except('archivo');
+        $data = $request->safe()->except(['archivo', 'tipo_codigo']);
 
         return new MaterialResource($this->service->create($data, $request->user()->id, $request->file('archivo')));
     }
@@ -74,7 +74,7 @@ final class MaterialController extends Controller
 
     public function update(UpdateMaterialRequest $request, Material $material): MaterialResource
     {
-        $data = $request->safe()->except('archivo');
+        $data = $request->safe()->except(['archivo', 'tipo_codigo']);
 
         return new MaterialResource($this->service->update($material, $data, $request->user()->id, $request->file('archivo')));
     }

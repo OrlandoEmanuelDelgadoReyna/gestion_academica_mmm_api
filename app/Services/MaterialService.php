@@ -62,6 +62,8 @@ final class MaterialService
                     $data['ruta_recurso'] = $storedPath;
                 }
 
+                unset($data['tipo_material_id'], $data['tipo_codigo']);
+
                 $before = $material->getAttributes();
                 $updated = $this->materiales->update($material, $data);
                 $this->auditorias->record($actor, 'UPDATE', 'materiales', $updated->id, $before, $updated->getAttributes());

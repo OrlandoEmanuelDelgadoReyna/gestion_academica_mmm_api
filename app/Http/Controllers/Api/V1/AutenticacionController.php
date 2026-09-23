@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ChangePasswordRequest;
 use App\Http\Requests\LoginRequest;
+use App\Http\Requests\UpdateProfilePhotoRequest;
 use App\Http\Resources\UsuarioResource;
 use App\Services\AutenticacionService;
 use Illuminate\Http\JsonResponse;
@@ -40,5 +41,22 @@ final class AutenticacionController extends Controller
         $this->service->changePassword($request->user(), (string) $request->string('contrasena_actual'), (string) $request->string('contrasena'));
 
         return response()->json(status: 204);
+    }
+
+    public function updateProfilePhoto(UpdateProfilePhotoRequest $request): UsuarioResource
+    {
+        $foto = $request->file('foto');
+        abort_unless($foto instanceof \Illuminate\Http\UploadedFile, 422);
+
+        $usuario = $this->service->updateProfilePhoto($request->user(), $foto);
+
+        return new UsuarioResource($usuario);
+    }
+
+    public function destroyProfilePhoto(Request $request): UsuarioResource
+    {
+        $usuario = $this->service->deleteProfilePhoto($request->user());
+
+        return new UsuarioResource($usuario);
     }
 }

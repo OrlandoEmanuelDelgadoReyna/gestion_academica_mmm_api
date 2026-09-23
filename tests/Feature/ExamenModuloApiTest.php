@@ -43,6 +43,46 @@ final class ExamenModuloApiTest extends TestCase
             ->assertJsonPath('data.creado_por_usuario_id', $admin->id);
     }
 
+    public function test_examen_created_for_grupo_a_is_not_listed_for_grupo_b(): void
+    {
+        $this->actingAsAdmin();
+        $church = (int) DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
+        $curso = Curso::query()->create([
+            'iglesia_id' => $church,
+            'codigo' => 'EX-GA-GB',
+            'nombre' => 'Formación de maestros',
+            'activo' => true,
+        ]);
+        $grupoA = $this->createSeccion($curso->id, 'A');
+        $grupoB = $this->createSeccion($curso->id, 'B');
+
+        $id = (int) $this->postJson(
+            '/api/v1/examenes-finales',
+            $this->examenPayload($grupoA->id, 'Examen Grupo A'),
+        )->assertSuccessful()->json('data.id');
+
+        $this->assertDatabaseHas('examenes_finales', [
+            'id' => $id,
+            'programacion_academica_id' => $grupoA->id,
+        ]);
+
+        $idsB = collect($this->getJson("/api/v1/examenes-finales?programacion_academica_id={$grupoB->id}")
+            ->assertOk()
+            ->json('data'))->pluck('id');
+        $this->assertFalse($idsB->contains($id));
+
+        $this->putJson("/api/v1/examenes-finales/{$id}", [
+            'titulo' => 'Sigue en Grupo A',
+            'programacion_academica_id' => $grupoB->id,
+        ])->assertSuccessful();
+
+        $this->assertDatabaseHas('examenes_finales', [
+            'id' => $id,
+            'programacion_academica_id' => $grupoA->id,
+            'titulo' => 'Sigue en Grupo A',
+        ]);
+    }
+
     public function test_admin_can_edit_examen(): void
     {
         $admin = $this->actingAsAdmin();
@@ -906,10 +946,15 @@ final class ExamenModuloApiTest extends TestCase
             'activo' => true,
         ]);
 
+        return $this->createSeccion($curso->id, 'A');
+    }
+
+    private function createSeccion(int $cursoId, string $grupo): ProgramacionAcademica
+    {
         return ProgramacionAcademica::query()->create([
-            'curso_id' => $curso->id,
+            'curso_id' => $cursoId,
             'periodo' => '2026-II',
-            'grupo' => 'A',
+            'grupo' => $grupo,
             'fecha_inicio' => '2026-09-01',
             'fecha_fin' => '2026-09-30',
             'capacidad' => 20,

@@ -63,6 +63,41 @@ final class MatriculaFilterApiTest extends TestCase
             ->assertJsonStructure(['data']);
     }
 
+    public function test_store_associates_matricula_to_the_given_programacion(): void
+    {
+        $grupoA = $this->createProgramacionWithMatriculas('MAT-CTX-A', 'A', 0);
+        $grupoB = $this->createProgramacionWithMatriculas('MAT-CTX-B', 'B', 0);
+        $church = (int) DB::table('iglesias')->where('codigo', 'MMM-PRINCIPAL')->value('id');
+        $miembro = Miembro::query()->create([
+            'iglesia_id' => $church,
+            'tipo_documento' => 'DNI',
+            'numero_documento' => '76543210',
+            'nombres' => 'Nuevo',
+            'apellidos' => 'Alumno',
+            'fecha_nacimiento' => '2000-01-01',
+            'sexo' => 'M',
+            'correo_electronico' => 'nuevo.ctx@mmm.local',
+            'telefono' => '977777777',
+            'direccion' => 'Dirección alumno',
+        ]);
+
+        $id = (int) $this->postJson('/api/v1/matriculas', [
+            'programacion_academica_id' => $grupoA['programacion']->id,
+            'miembro_id' => $miembro->id,
+        ])->assertCreated()->json('data.id');
+
+        $this->assertDatabaseHas('matriculas', [
+            'id' => $id,
+            'programacion_academica_id' => $grupoA['programacion']->id,
+            'miembro_id' => $miembro->id,
+        ]);
+
+        $idsB = collect($this->getJson("/api/v1/matriculas?programacion_academica_id={$grupoB['programacion']->id}&per_page=100")
+            ->assertOk()
+            ->json('data'))->pluck('id');
+        $this->assertFalse($idsB->contains($id));
+    }
+
     /**
      * @return array{programacion: ProgramacionAcademica, matriculas: list<Matricula>}
      */
