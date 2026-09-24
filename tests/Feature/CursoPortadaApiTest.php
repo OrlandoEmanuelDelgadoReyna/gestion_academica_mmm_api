@@ -24,7 +24,7 @@ final class CursoPortadaApiTest extends TestCase
     {
         parent::setUp();
         $this->seedInstitutionalCatalog();
-        Storage::fake(CursoPortadaStorage::DISK);
+        $this->fakeObjectStorage();
     }
 
     public function test_admin_can_create_curso_without_portada(): void
@@ -69,7 +69,7 @@ final class CursoPortadaApiTest extends TestCase
         $this->assertIsString($path);
         $this->assertTrue(CursoPortadaStorage::isManagedPath($path));
         Storage::disk(CursoPortadaStorage::DISK)->assertExists($path);
-        $this->assertStringContainsString($path, (string) $response->json('data.portada_url'));
+        $this->assertTemporaryMediaUrl($response->json('data.portada_url'), $path);
         $this->assertDatabaseHas('cursos', [
             'codigo' => 'POR-101',
             'portada_path' => $path,
@@ -92,6 +92,7 @@ final class CursoPortadaApiTest extends TestCase
         $path = $response->json('data.portada_path');
         $this->assertIsString($path);
         Storage::disk(CursoPortadaStorage::DISK)->assertExists($path);
+        $this->assertTemporaryMediaUrl($response->json('data.portada_url'), $path);
         $this->assertDatabaseHas('cursos', [
             'id' => $curso->id,
             'portada_path' => $path,
@@ -262,6 +263,25 @@ final class CursoPortadaApiTest extends TestCase
         ], ['Accept' => 'application/json'])->assertUnprocessable();
 
         $this->assertDatabaseMissing('cursos', ['codigo' => 'POR-405']);
+    }
+
+    public function test_existing_portada_path_keeps_the_same_object_key(): void
+    {
+        $this->actingAsAdmin();
+        $path = 'cursos/portadas/zKDFcXpb1Kr28TS9ZI6qVGnQYbyR7473k7AWwDjQ.jpg';
+        Storage::disk(CursoPortadaStorage::DISK)->put($path, 'cover-bytes');
+
+        $curso = $this->createCurso('POR-EXIST');
+        $curso->forceFill(['portada_path' => $path])->save();
+
+        $response = $this->getJson('/api/v1/cursos/'.$curso->id)->assertOk();
+
+        $response->assertJsonPath('data.portada_path', $path);
+        $this->assertTemporaryMediaUrl($response->json('data.portada_url'), $path);
+        $this->assertDatabaseHas('cursos', [
+            'id' => $curso->id,
+            'portada_path' => $path,
+        ]);
     }
 
     private function churchId(): int

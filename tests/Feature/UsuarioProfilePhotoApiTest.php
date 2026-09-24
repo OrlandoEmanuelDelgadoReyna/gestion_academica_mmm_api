@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Usuario;
 use App\Support\UsuarioProfilePhotoStorage;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -22,7 +21,7 @@ final class UsuarioProfilePhotoApiTest extends TestCase
     {
         parent::setUp();
         $this->seedInstitutionalCatalog();
-        Storage::fake(UsuarioProfilePhotoStorage::DISK);
+        $this->fakeObjectStorage();
     }
 
     public function test_authenticated_user_without_photo_returns_null_url(): void
@@ -50,7 +49,7 @@ final class UsuarioProfilePhotoApiTest extends TestCase
         $this->assertIsString($path);
         $this->assertTrue(UsuarioProfilePhotoStorage::isManagedPath($path));
         Storage::disk(UsuarioProfilePhotoStorage::DISK)->assertExists($path);
-        $this->assertStringContainsString($path, (string) $response->json('data.profile_photo_url'));
+        $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
         $this->assertSame($usuario->id, $response->json('data.id'));
 
         $this->assertDatabaseHas('usuarios', [
@@ -193,6 +192,7 @@ final class UsuarioProfilePhotoApiTest extends TestCase
             ->assertJsonPath('data.profile_photo_url', $uploaded->json('data.profile_photo_url'));
 
         $this->assertNotNull($uploaded->json('data.profile_photo_url'));
+        $this->assertTemporaryMediaUrl($uploaded->json('data.profile_photo_url'), $path);
     }
 
     public function test_unauthenticated_user_cannot_upload_photo(): void
@@ -200,5 +200,22 @@ final class UsuarioProfilePhotoApiTest extends TestCase
         $this->post('/api/v1/me/foto-perfil', [
             'foto' => UploadedFile::fake()->image('anon.jpg'),
         ], ['Accept' => 'application/json'])->assertUnauthorized();
+    }
+
+    public function test_existing_profile_photo_path_keeps_the_same_object_key(): void
+    {
+        $usuario = $this->actingAsAdmin();
+        $path = 'users/profile/JbkksTw2rvPTPRC73V0FTHXxMm52U8lB0ZLvMBKG.jpg';
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->put($path, 'avatar-bytes');
+        $usuario->forceFill(['profile_photo_path' => $path])->save();
+
+        $response = $this->getJson('/api/v1/me')->assertOk();
+
+        $response->assertJsonPath('data.profile_photo_path', $path);
+        $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
+        $this->assertDatabaseHas('usuarios', [
+            'id' => $usuario->id,
+            'profile_photo_path' => $path,
+        ]);
     }
 }

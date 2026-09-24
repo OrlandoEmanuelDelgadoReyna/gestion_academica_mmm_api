@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace App\Support;
 
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
-/** Public-disk helpers for course catalog covers. */
+/** Private bucket helpers for course catalog covers. */
 final class CursoPortadaStorage
 {
-    public const DISK = 'public';
+    public const DISK = ObjectStorage::DISK;
 
     public const DIRECTORY = 'cursos/portadas';
 
@@ -35,13 +34,11 @@ final class CursoPortadaStorage
 
     public static function storeUpload(UploadedFile $archivo): string
     {
-        $path = Storage::disk(self::DISK)->putFile(self::DIRECTORY, $archivo);
-
-        if (! is_string($path) || $path === '') {
+        try {
+            return ObjectStorage::storeUpload(self::DIRECTORY, $archivo);
+        } catch (RuntimeException) {
             throw new RuntimeException('No se pudo guardar la portada del curso.');
         }
-
-        return $path;
     }
 
     public static function deleteManaged(?string $ruta): void
@@ -50,7 +47,7 @@ final class CursoPortadaStorage
             return;
         }
 
-        Storage::disk(self::DISK)->delete($ruta);
+        ObjectStorage::delete(self::normalizedPath($ruta));
     }
 
     public static function url(?string $ruta): ?string
@@ -59,13 +56,18 @@ final class CursoPortadaStorage
             return null;
         }
 
-        $url = Storage::disk(self::DISK)->url($ruta);
+        $url = ObjectStorage::temporaryUrl(self::normalizedPath($ruta));
 
-        return is_string($url) && $url !== '' ? $url : null;
+        return $url !== '' ? $url : null;
     }
 
     public static function mimesRule(): string
     {
         return 'mimes:'.implode(',', self::EXTENSIONS);
+    }
+
+    private static function normalizedPath(string $ruta): string
+    {
+        return ltrim(str_replace('\\', '/', trim($ruta)), '/');
     }
 }

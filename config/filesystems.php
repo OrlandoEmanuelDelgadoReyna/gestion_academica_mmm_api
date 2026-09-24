@@ -47,14 +47,33 @@ return [
             'report' => false,
         ],
 
+        /*
+         | Dedicated Railway Bucket (S3-compatible, private).
+         | Used only by course covers and profile photographs.
+         | FILESYSTEM_DISK stays local; do not point the default disk here.
+         */
+        'media' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => env('AWS_S3_BUCKET_NAME', env('AWS_BUCKET')),
+            'endpoint' => env('AWS_ENDPOINT_URL', env('AWS_ENDPOINT')),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+            'temporary_url_minutes' => (int) env('MEDIA_URL_TTL_MINUTES', 60),
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
             'region' => env('AWS_DEFAULT_REGION'),
-            'bucket' => env('AWS_BUCKET'),
+            'bucket' => env('AWS_S3_BUCKET_NAME', env('AWS_BUCKET')),
             'url' => env('AWS_URL'),
-            'endpoint' => env('AWS_ENDPOINT'),
+            'endpoint' => env('AWS_ENDPOINT_URL', env('AWS_ENDPOINT')),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
