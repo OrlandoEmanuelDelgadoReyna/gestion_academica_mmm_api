@@ -11,6 +11,7 @@ use App\Models\NotificacionDestinatario;
 use App\Models\ProgramacionAcademica;
 use App\Models\Tarea;
 use App\Models\Usuario;
+use App\Services\NotificacionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -364,7 +365,7 @@ final class ComunicacionApiTest extends TestCase
             ->json('data.id');
 
         $this->assertSame(1, Notificacion::query()->where('anuncio_id', $id)->count());
-        app(\App\Services\NotificacionService::class)->deleteGeneratedByAnuncio($id);
+        app(NotificacionService::class)->deleteGeneratedByAnuncio($id);
         $this->assertSame(0, Notificacion::query()->where('anuncio_id', $id)->count());
 
         $this->putJson("/api/v1/anuncios/{$id}", [
@@ -984,6 +985,64 @@ final class ComunicacionApiTest extends TestCase
             'notificacion_id' => $notificacion->id,
             'usuario_id' => $ajeno->id,
         ]);
+    }
+
+    public function test_published_tarea_notifies_assigned_teacher_and_enrolled_student_only(): void
+    {
+        $admin = $this->actingAsAdmin();
+        $propia = $this->createProgramacion('COM-TAR-P1');
+        $ajena = $this->createProgramacion('COM-TAR-P2');
+
+        $docenteAsignado = $this->createDocenteUser('docente.tar.p1');
+        $docenteAjeno = $this->createDocenteUser('docente.tar.p2');
+        $this->assignDocente($docenteAsignado, $propia);
+        $this->assignDocente($docenteAjeno, $ajena);
+
+        $alumnoPropio = $this->createAlumnoUser('alumno.tar.p1');
+        $alumnoAmbas = $this->createAlumnoUser('alumno.tar.ambas');
+        $alumnoAjeno = $this->createAlumnoUser('alumno.tar.p2');
+        $this->enrollAlumno($alumnoPropio, $propia);
+        $this->enrollAlumno($alumnoAmbas, $propia);
+        $this->enrollAlumno($alumnoAmbas, $ajena);
+        $this->enrollAlumno($alumnoAjeno, $ajena);
+
+        Sanctum::actingAs($admin);
+        $this->postJson('/api/v1/tareas', [
+            'programacion_academica_id' => $propia->id,
+            'titulo' => 'Derechos del niño',
+            'descripcion' => 'Entregar resumen',
+            'publicado_at' => now()->toDateTimeString(),
+            'fecha_limite_at' => now()->addDays(7)->toDateTimeString(),
+            'puntaje_maximo' => 20,
+        ])->assertCreated();
+
+        $notificacion = Notificacion::query()
+            ->where('tipo', 'tarea')
+            ->where('titulo', 'Nueva tarea publicada')
+            ->where('contenido', 'Se publicó la tarea "Derechos del niño".')
+            ->first();
+        $this->assertNotNull($notificacion);
+        $this->assertSame(
+            1,
+            Notificacion::query()
+                ->where('tipo', 'tarea')
+                ->where('titulo', 'Nueva tarea publicada')
+                ->count(),
+        );
+
+        foreach ([$docenteAsignado->id, $alumnoPropio->id, $alumnoAmbas->id] as $usuarioId) {
+            $this->assertDatabaseHas('notificacion_destinatarios', [
+                'notificacion_id' => $notificacion->id,
+                'usuario_id' => $usuarioId,
+            ]);
+        }
+
+        foreach ([$docenteAjeno->id, $alumnoAjeno->id, $admin->id] as $usuarioId) {
+            $this->assertDatabaseMissing('notificacion_destinatarios', [
+                'notificacion_id' => $notificacion->id,
+                'usuario_id' => $usuarioId,
+            ]);
+        }
     }
 
     public function test_entrega_notifies_assigned_teacher_and_grade_notifies_student(): void

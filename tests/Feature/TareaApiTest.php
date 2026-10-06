@@ -133,19 +133,38 @@ final class TareaApiTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_docente_cannot_create_or_update_tarea(): void
+    public function test_assigned_docente_can_create_and_update_tarea_in_own_programacion(): void
     {
         $admin = $this->actingAsAdmin();
         $programacion = $this->createProgramacion('TAR-DOC-MUT');
-        $tarea = $this->createTarea($programacion, (int) $admin->id);
         $docente = $this->createDocenteUser('docente.tar.m');
         $this->assignDocente($docente, $programacion);
 
-        $this->postJson('/api/v1/tareas', $this->tareaPayload($programacion))
+        Sanctum::actingAs($docente);
+        $id = (int) $this->postJson('/api/v1/tareas', $this->tareaPayload($programacion))
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->assertSame($programacion->id, (int) Tarea::query()->findOrFail($id)->programacion_academica_id);
+
+        $this->putJson("/api/v1/tareas/{$id}", ['titulo' => 'Tarea actualizada'])
+            ->assertOk()
+            ->assertJsonPath('data.titulo', 'Tarea actualizada');
+
+        $this->deleteJson("/api/v1/tareas/{$id}")
             ->assertForbidden();
-        $this->putJson("/api/v1/tareas/{$tarea->id}", ['titulo' => 'Hack'])
-            ->assertForbidden();
-        $this->deleteJson("/api/v1/tareas/{$tarea->id}")
+    }
+
+    public function test_docente_cannot_create_tarea_in_unassigned_programacion(): void
+    {
+        $this->actingAsAdmin();
+        $propia = $this->createProgramacion('TAR-DOC-OWN2');
+        $ajena = $this->createProgramacion('TAR-DOC-FOR2');
+        $docente = $this->createDocenteUser('docente.tar.scope');
+        $this->assignDocente($docente, $propia);
+
+        Sanctum::actingAs($docente);
+        $this->postJson('/api/v1/tareas', $this->tareaPayload($ajena))
             ->assertForbidden();
     }
 

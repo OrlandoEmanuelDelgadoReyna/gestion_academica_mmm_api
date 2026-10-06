@@ -24,12 +24,12 @@ final class TareaPolicy
 
     public function create(Usuario $user): bool
     {
-        return $this->access->isGlobalAcademic($user);
+        return $this->access->isGlobalAcademic($user) || $this->access->isDocente($user);
     }
 
     public function update(Usuario $user, Tarea $tarea): bool
     {
-        return $this->access->isGlobalAcademic($user);
+        return $this->access->teachesProgramacionId($user, (int) $tarea->programacion_academica_id);
     }
 
     public function delete(Usuario $user, Tarea $tarea): bool

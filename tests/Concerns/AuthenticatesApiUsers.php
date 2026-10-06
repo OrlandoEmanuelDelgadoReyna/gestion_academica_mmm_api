@@ -139,6 +139,37 @@ trait AuthenticatesApiUsers
         ]);
     }
 
+    protected function attachMiembroRole(Usuario $usuario): Usuario
+    {
+        $this->seedInstitutionalCatalog();
+        $now = now();
+        $adminId = Usuario::query()->where('nombre_usuario', 'admin')->value('id');
+
+        \DB::table('roles')->updateOrInsert(
+            ['codigo' => 'MIEMBRO'],
+            [
+                'nombre' => 'Miembro',
+                'descripcion' => 'Miembro de la iglesia',
+                'activo' => true,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ],
+        );
+
+        $roleId = \DB::table('roles')->where('codigo', 'MIEMBRO')->value('id');
+        \DB::table('usuario_roles')->updateOrInsert(
+            ['usuario_id' => $usuario->id, 'rol_id' => $roleId],
+            [
+                'asignado_por_usuario_id' => $adminId,
+                'asignado_at' => $now,
+                'updated_at' => $now,
+                'created_at' => $now,
+            ],
+        );
+
+        return $usuario->fresh(['roles']) ?? $usuario;
+    }
+
     protected function actingAsCertificador(): Usuario
     {
         $this->seedInstitutionalCatalog();

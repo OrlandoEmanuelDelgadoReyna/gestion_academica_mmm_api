@@ -6,19 +6,21 @@ namespace App\Http\Requests;
 
 use App\Models\ProgramacionAcademica;
 use App\Models\Tarea;
+use App\Services\AcademicAccess;
 use Illuminate\Foundation\Http\FormRequest;
 
 final class StoreTareaRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        if (! ($this->user()?->can('create', Tarea::class) ?? false)) {
+        $user = $this->user();
+        if ($user === null || ! $user->can('create', Tarea::class)) {
             return false;
         }
 
         $programacionId = (int) $this->input('programacion_academica_id');
         if ($programacionId < 1) {
-            return true;
+            return app(AcademicAccess::class)->isGlobalAcademic($user);
         }
 
         $programacion = ProgramacionAcademica::query()->find($programacionId);
@@ -26,7 +28,7 @@ final class StoreTareaRequest extends FormRequest
             return true;
         }
 
-        return $this->user()?->can('view', $programacion) ?? false;
+        return app(AcademicAccess::class)->teachesProgramacion($user, $programacion);
     }
 
     public function rules(): array

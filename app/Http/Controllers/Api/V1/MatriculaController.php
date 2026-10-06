@@ -34,12 +34,14 @@ final class MatriculaController extends Controller
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'programacion_academica_id' => ['sometimes', 'integer', 'exists:programaciones_academicas,id'],
             'estado' => ['sometimes', 'string', Rule::in(['activa', 'retirada', 'completada'])],
+            'propias' => ['sometimes', 'boolean'],
         ]);
 
         $programacionId = isset($validated['programacion_academica_id'])
             ? (int) $validated['programacion_academica_id']
             : null;
         $estado = isset($validated['estado']) ? (string) $validated['estado'] : null;
+        $propias = $request->boolean('propias');
 
         /** @var Usuario $user */
         $user = $request->user();
@@ -49,12 +51,24 @@ final class MatriculaController extends Controller
             $this->authorize('view', $programacion);
         }
 
+        $assigned = $this->academicAccess->teacherListMiembroId($user);
+        $enrolled = $this->academicAccess->studentListMiembroId($user);
+        if ($propias) {
+            $assigned = null;
+            $enrolled = $this->academicAccess->ownEnrollmentMiembroId($user);
+            if ($enrolled === null) {
+                return MatriculaResource::collection(
+                    Matricula::query()->whereRaw('0 = 1')->paginate((int) ($validated['per_page'] ?? 15)),
+                );
+            }
+        }
+
         return MatriculaResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $programacionId,
             $estado,
-            $this->academicAccess->teacherListMiembroId($user),
-            $this->academicAccess->studentListMiembroId($user),
+            $assigned,
+            $enrolled,
         ));
     }
 

@@ -262,6 +262,39 @@ final class AcademicAccess
         return $user->miembro_id !== null ? (int) $user->miembro_id : null;
     }
 
+    /**
+     * List scopes for a resource query.
+     * A DOCENTE who is enrolled in a programación they do not teach
+     * must use enrollment scope for that programación, not teacher AND.
+     *
+     * @return array{0: ?int, 1: ?int} [assignedMiembroId, enrolledMiembroId]
+     */
+    public function resourceListScopes(Usuario $user, ?int $programacionId = null): array
+    {
+        $assigned = $this->teacherListMiembroId($user);
+        $enrolled = $this->studentListMiembroId($user);
+
+        if ($programacionId === null || $assigned === null) {
+            return [$assigned, $enrolled];
+        }
+
+        if ($this->isAssignedToProgramacionId($user, $programacionId)) {
+            return [$assigned, $enrolled];
+        }
+
+        if ($this->hasActiveEnrollment($user, $programacionId) && $user->miembro_id !== null) {
+            return [null, (int) $user->miembro_id];
+        }
+
+        return [$assigned, $enrolled];
+    }
+
+    /** Own active enrollments of the authenticated member, including DOCENTE+MIEMBRO. */
+    public function ownEnrollmentMiembroId(Usuario $user): ?int
+    {
+        return $user->miembro_id !== null ? (int) $user->miembro_id : null;
+    }
+
     public function teachesProgramacion(Usuario $user, ProgramacionAcademica $programacion): bool
     {
         if ($this->isGlobalAcademic($user)) {
@@ -407,7 +440,6 @@ final class AcademicAccess
             ->exists();
     }
 
-    /** @return \Closure */
     private function assignedProgramacionIdsQuery(int $miembroId): \Closure
     {
         return function ($sub) use ($miembroId): void {
@@ -417,7 +449,6 @@ final class AcademicAccess
         };
     }
 
-    /** @return \Closure */
     private function enrolledProgramacionIdsQuery(int $miembroId): \Closure
     {
         return function ($sub) use ($miembroId): void {

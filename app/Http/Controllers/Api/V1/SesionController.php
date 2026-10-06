@@ -44,11 +44,14 @@ final class SesionController extends Controller
             }
         }
 
+        $scopedProgramacionId = ($programacionId !== null && $programacionId > 0) ? $programacionId : null;
+        [$assigned, $enrolled] = $this->academicAccess->resourceListScopes($user, $scopedProgramacionId);
+
         return SesionResource::collection($this->service->paginate(
             (int) $request->integer('per_page', 15),
-            ($programacionId !== null && $programacionId > 0) ? $programacionId : null,
-            $this->academicAccess->teacherListMiembroId($user),
-            $this->academicAccess->studentListMiembroId($user),
+            $scopedProgramacionId,
+            $assigned,
+            $enrolled,
         ));
     }
 

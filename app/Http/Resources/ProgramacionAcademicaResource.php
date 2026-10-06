@@ -26,6 +26,10 @@ final class ProgramacionAcademicaResource extends JsonResource
             'nota_minima_aprobatoria' => $this->nota_minima_aprobatoria,
             'maximo_intentos_examen' => $this->maximo_intentos_examen,
             'estado' => $this->estado,
+            'matriculas_count' => $this->when(
+                $this->resource->offsetExists('matriculas_count'),
+                fn (): int => (int) $this->matriculas_count,
+            ),
             'curso' => new CursoResource($this->whenLoaded('curso')),
             'aula' => $this->whenLoaded('aula'),
             'docentes' => MiembroResource::collection($this->whenLoaded('docentes')),

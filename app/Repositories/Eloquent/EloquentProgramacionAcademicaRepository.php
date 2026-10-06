@@ -20,7 +20,10 @@ final class EloquentProgramacionAcademicaRepository implements ProgramacionAcade
     public function paginate(int $perPage, ?int $assignedMiembroId = null, ?int $enrolledMiembroId = null): LengthAwarePaginator
     {
         $query = ProgramacionAcademica::query()
-            ->with(['curso', 'aula', 'horarios']);
+            ->with(['curso', 'aula', 'horarios'])
+            ->withCount([
+                'matriculas as matriculas_count' => fn ($sub) => $sub->where('estado', 'activa'),
+            ]);
 
         $this->academicAccess->constrainProgramaciones($query, $assignedMiembroId);
         $this->academicAccess->constrainByActiveEnrollment($query, $enrolledMiembroId, 'id');

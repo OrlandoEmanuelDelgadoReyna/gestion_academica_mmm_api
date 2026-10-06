@@ -64,11 +64,13 @@ final class ExamenFinalController extends Controller
             $this->authorize('view', $programacion);
         }
 
+        [$assigned, $enrolled] = $this->academicAccess->resourceListScopes($user, $programacionId);
+
         return ExamenFinalResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $programacionId,
-            $this->academicAccess->teacherListMiembroId($user),
-            $this->academicAccess->studentListMiembroId($user),
+            $assigned,
+            $enrolled,
         ));
     }
 

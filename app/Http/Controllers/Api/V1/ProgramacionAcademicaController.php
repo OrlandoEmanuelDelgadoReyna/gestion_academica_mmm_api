@@ -50,7 +50,13 @@ final class ProgramacionAcademicaController extends Controller
     {
         $this->authorize('view', $programacionAcademica);
 
-        return new ProgramacionAcademicaResource($programacionAcademica->load(['curso', 'aula', 'docentes', 'estadosMembresiaPermitidos', 'horarios']));
+        return new ProgramacionAcademicaResource(
+            $programacionAcademica
+                ->load(['curso', 'aula', 'docentes', 'estadosMembresiaPermitidos', 'horarios'])
+                ->loadCount([
+                    'matriculas as matriculas_count' => fn ($query) => $query->where('estado', 'activa'),
+                ])
+        );
     }
 
     public function update(UpdateProgramacionAcademicaRequest $request, ProgramacionAcademica $programacionAcademica): ProgramacionAcademicaResource

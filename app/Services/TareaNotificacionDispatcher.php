@@ -19,26 +19,17 @@ final class TareaNotificacionDispatcher
 
     public function tareaPublicada(Tarea $tarea, int $actorId): void
     {
-        $tarea->loadMissing('programacionAcademica.curso');
+        $tarea->loadMissing(['programacionAcademica.curso', 'programacionAcademica.docentes']);
         $iglesiaId = $tarea->programacionAcademica?->curso?->iglesia_id;
         if ($iglesiaId === null) {
             return;
         }
 
-        $alumnoIds = Usuario::query()
-            ->where('activo', true)
-            ->whereIn('miembro_id', Matricula::query()
-                ->where('programacion_academica_id', $tarea->programacion_academica_id)
-                ->where('estado', 'activa')
-                ->select('miembro_id'))
-            ->pluck('id')
-            ->all();
-
         $this->dispatch(
             (int) $iglesiaId,
             'Nueva tarea publicada',
             sprintf('Se publicó la tarea "%s".', $tarea->titulo),
-            $alumnoIds,
+            $this->destinatariosDeProgramacion($tarea),
             $actorId,
         );
     }
@@ -104,5 +95,29 @@ final class TareaNotificacionDispatcher
             'contenido' => $contenido,
             'tipo' => 'tarea',
         ], $usuarioIds, $actorId);
+    }
+
+    /** @return list<int> */
+    private function destinatariosDeProgramacion(Tarea $tarea): array
+    {
+        $programacionId = (int) $tarea->programacion_academica_id;
+
+        $alumnoIds = Usuario::query()
+            ->where('activo', true)
+            ->whereIn('miembro_id', Matricula::query()
+                ->where('programacion_academica_id', $programacionId)
+                ->where('estado', 'activa')
+                ->select('miembro_id'))
+            ->pluck('id')
+            ->all();
+
+        $docenteMiembroIds = $tarea->programacionAcademica?->docentes->pluck('id') ?? collect();
+        $docenteIds = Usuario::query()
+            ->where('activo', true)
+            ->whereIn('miembro_id', $docenteMiembroIds)
+            ->pluck('id')
+            ->all();
+
+        return array_values(array_unique(array_merge($alumnoIds, $docenteIds)));
     }
 }

@@ -43,16 +43,20 @@ final class EntregaTareaController extends Controller
         /** @var Usuario $user */
         $user = $request->user();
 
+        $programacionId = null;
         if ($tareaId !== null) {
             $tarea = Tarea::query()->findOrFail($tareaId);
             $this->authorize('view', $tarea);
+            $programacionId = (int) $tarea->programacion_academica_id;
         }
+
+        [$assigned, $enrolled] = $this->academicAccess->resourceListScopes($user, $programacionId);
 
         return EntregaTareaResource::collection($this->service->paginate(
             (int) ($validated['per_page'] ?? 15),
             $tareaId,
-            $this->academicAccess->teacherListMiembroId($user),
-            $this->academicAccess->studentListMiembroId($user),
+            $assigned,
+            $enrolled,
         ));
     }
 
