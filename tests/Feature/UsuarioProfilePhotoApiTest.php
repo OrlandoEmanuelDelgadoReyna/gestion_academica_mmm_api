@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Exceptions\ObjectStorageException;
+use App\Support\ObjectStorage;
 use App\Support\UsuarioProfilePhotoStorage;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Mockery;
 use Tests\Concerns\AuthenticatesApiUsers;
 use Tests\TestCase;
 
@@ -34,7 +38,7 @@ final class UsuarioProfilePhotoApiTest extends TestCase
             ->assertJsonPath('data.profile_photo_url', null);
     }
 
-    public function test_user_can_upload_profile_photo(): void
+    public function test_administrador_can_upload_jpeg_profile_photo(): void
     {
         $usuario = $this->actingAsAdmin();
 
@@ -52,6 +56,44 @@ final class UsuarioProfilePhotoApiTest extends TestCase
         $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
         $this->assertSame($usuario->id, $response->json('data.id'));
 
+        $this->assertDatabaseHas('usuarios', [
+            'id' => $usuario->id,
+            'profile_photo_path' => $path,
+        ]);
+    }
+
+    public function test_alumno_can_upload_png_profile_photo(): void
+    {
+        $usuario = $this->createAlumnoUser('alumno.foto.png');
+
+        $response = $this->post('/api/v1/me/foto-perfil', [
+            'foto' => UploadedFile::fake()->image('mia.png', 320, 320),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+        $path = $response->json('data.profile_photo_path');
+        $this->assertTrue(UsuarioProfilePhotoStorage::isManagedPath($path));
+        $this->assertTrue(str_ends_with((string) $path, '.png'));
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->assertExists($path);
+        $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
+        $this->assertSame($usuario->id, $response->json('data.id'));
+    }
+
+    public function test_docente_can_upload_jpeg_profile_photo(): void
+    {
+        $usuario = $this->createDocenteUser('docente.foto.jpeg');
+
+        $response = $this->post('/api/v1/me/foto-perfil', [
+            'foto' => UploadedFile::fake()->image('docente.jpg', 400, 400),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+        $path = $response->json('data.profile_photo_path');
+        $this->assertTrue(UsuarioProfilePhotoStorage::isManagedPath($path));
+        $this->assertTrue(str_ends_with((string) $path, '.jpg'));
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->assertExists($path);
+        $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
+        $this->assertSame($usuario->id, $response->json('data.id'));
         $this->assertDatabaseHas('usuarios', [
             'id' => $usuario->id,
             'profile_photo_path' => $path,
@@ -213,6 +255,66 @@ final class UsuarioProfilePhotoApiTest extends TestCase
 
         $response->assertJsonPath('data.profile_photo_path', $path);
         $this->assertTemporaryMediaUrl($response->json('data.profile_photo_url'), $path);
+        $this->assertDatabaseHas('usuarios', [
+            'id' => $usuario->id,
+            'profile_photo_path' => $path,
+        ]);
+    }
+
+    public function test_failed_replace_keeps_the_previous_photograph(): void
+    {
+        $usuario = $this->actingAsAdmin();
+        $media = Storage::disk(UsuarioProfilePhotoStorage::DISK);
+
+        $first = $this->post('/api/v1/me/foto-perfil', [
+            'foto' => UploadedFile::fake()->image('primera.jpg'),
+        ], ['Accept' => 'application/json']);
+        $first->assertOk();
+        $oldPath = $first->json('data.profile_photo_path');
+        $media->assertExists($oldPath);
+
+        $mock = Mockery::mock(Filesystem::class);
+        $mock->shouldReceive('putFile')->andReturn(false);
+        $this->app->make('filesystem')->set(ObjectStorage::DISK, $mock);
+
+        $response = $this->post('/api/v1/me/foto-perfil', [
+            'foto' => UploadedFile::fake()->image('segunda.png'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertStatus(ObjectStorageException::STATUS)
+            ->assertJsonPath('code', ObjectStorageException::CODE)
+            ->assertJsonPath('message', 'No se pudo guardar la fotografía de perfil.')
+            ->assertJsonMissingPath('exception')
+            ->assertJsonMissingPath('file')
+            ->assertJsonMissingPath('trace');
+
+        $this->assertDatabaseHas('usuarios', [
+            'id' => $usuario->id,
+            'profile_photo_path' => $oldPath,
+        ]);
+
+        $this->app->make('filesystem')->set(ObjectStorage::DISK, $media);
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->assertExists($oldPath);
+    }
+
+    public function test_temporary_url_failure_after_upload_does_not_return_500(): void
+    {
+        $usuario = $this->actingAsAdmin();
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->buildTemporaryUrlsUsing(
+            function (): string {
+                throw new \RuntimeException('unable to sign');
+            }
+        );
+
+        $response = $this->post('/api/v1/me/foto-perfil', [
+            'foto' => UploadedFile::fake()->image('sin-url.jpg'),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk();
+        $path = $response->json('data.profile_photo_path');
+        $this->assertTrue(UsuarioProfilePhotoStorage::isManagedPath($path));
+        $this->assertNull($response->json('data.profile_photo_url'));
+        Storage::disk(UsuarioProfilePhotoStorage::DISK)->assertExists($path);
         $this->assertDatabaseHas('usuarios', [
             'id' => $usuario->id,
             'profile_photo_path' => $path,

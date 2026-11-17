@@ -61,9 +61,16 @@ return [
             'endpoint' => env('AWS_ENDPOINT_URL', env('AWS_ENDPOINT')),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'visibility' => 'private',
-            'throw' => false,
+            'throw' => true,
             'report' => false,
             'temporary_url_minutes' => (int) env('MEDIA_URL_TTL_MINUTES', 60),
+            // AWS SDK 3.398 defaults to when_supported (CRC32). Tigris rejects those checksums.
+            'request_checksum_calculation' => 'when_required',
+            'response_checksum_validation' => 'when_required',
+            // Flysystem 3.25.1 always sends object ACL; Tigris rejects it. Bucket stays private.
+            'options' => [
+                'before_upload' => [\App\Support\OmitS3ObjectAcl::class, 'handle'],
+            ],
         ],
 
         's3' => [

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Exceptions\ObjectStorageException;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
 
@@ -36,8 +37,11 @@ final class UsuarioProfilePhotoStorage
     {
         try {
             return ObjectStorage::storeUpload(self::DIRECTORY, $archivo);
-        } catch (RuntimeException) {
-            throw new RuntimeException('No se pudo guardar la fotografía de perfil.');
+        } catch (RuntimeException $exception) {
+            throw ObjectStorageException::writeFailed(
+                'No se pudo guardar la fotografía de perfil.',
+                $exception,
+            );
         }
     }
 

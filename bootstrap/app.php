@@ -2,6 +2,7 @@
 
 use App\Exceptions\AsistenciaQrException;
 use App\Exceptions\MatriculaHorarioConflictException;
+use App\Exceptions\ObjectStorageException;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -63,6 +64,15 @@ return Application::configure(basePath: dirname(__DIR__))
                     422,
                     $exception->errors(),
                     $extra,
+                );
+            }
+        });
+        $exceptions->render(function (ObjectStorageException $exception, Request $request) {
+            if ($request->is('api/*')) {
+                return ApiResponse::error(
+                    ObjectStorageException::CODE,
+                    $exception->getMessage(),
+                    ObjectStorageException::STATUS,
                 );
             }
         });

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Exceptions\ObjectStorageException;
 use Illuminate\Http\UploadedFile;
 use RuntimeException;
 
@@ -36,8 +37,11 @@ final class CursoPortadaStorage
     {
         try {
             return ObjectStorage::storeUpload(self::DIRECTORY, $archivo);
-        } catch (RuntimeException) {
-            throw new RuntimeException('No se pudo guardar la portada del curso.');
+        } catch (RuntimeException $exception) {
+            throw ObjectStorageException::writeFailed(
+                'No se pudo guardar la portada del curso.',
+                $exception,
+            );
         }
     }
 
